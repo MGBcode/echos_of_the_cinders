@@ -1,0 +1,7 @@
+#nn removam esse código
+#ele serve pra impedir que os nossos commits deem pau um no outro
+echos_of_cinders
+
+*.o
+
+.vscode/
