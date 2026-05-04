@@ -13,8 +13,8 @@ LDFLAGS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 # Regra principal: Compilar tudo
 all: $(TARGET)
 
-$(TARGET): main.c
-	$(CC) main.c -o $(TARGET) $(CFLAGS) $(LDFLAGS)
+$(TARGET): *.c
+	$(CC) *.c -o $(TARGET) $(CFLAGS) $(LDFLAGS)
 
 # Regra para limpar os arquivos gerados
 clean:

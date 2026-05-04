@@ -1,0 +1,56 @@
+CONSTRUÇÃO DA TELA:
+    screenWidth = largura da tela em pixels
+    screenHeight = altura da tela em pixels
+
+VARIÁVEIS DE TEMPO E CONTROLES GERAIS:
+    deltaTime = armazena o tempo real (em frações de segundo) que se passou entre o frame anterior e o atual. Usado para padronizar velocidades e cronômetros independentemente de quantos FPS o computador está rodando
+    inputDir = vetor (X, Y) temporário que capta e armazena a direção que as setas do teclado estão apontando no exato momento
+
+VARIÁVEIS BASE DO JOGADOR (AGORA DENTRO DA STRUCT PLAYER):
+    pos = posição atual do jogador na tela (substituiu o antigo playerPos)
+    normalSpeed = velocidade base do jogador em pixels por segundo
+
+VARIÁVEIS DO DASH:
+    isDashing = verifica se o player está dando dash
+
+    dashSpeedMultiplier = regula a velocidade do dash multiplicando a velocidade base do jogador pelo valor da variável
+    dashDuration = duração do dash
+
+    dashCooldown = tempo de espera para iniciar outro dash
+
+    dashTimeCounter = contador utilizado para verificar se o dash não passou do limite de tempo imposto na variável dashDuration (toda vez que a tecla espaço é apertada ela reinicia)
+
+    cooldownTimeCounter = cronômetro que faz a contagem regressiva do tempo de recarga após o fim de um dash. O jogador só pode dar um novo dash quando essa variável chegar a zero ou menos
+    dashDirection = direção do dash congelada no momento da ativação, garantindo que o dash siga reto mesmo que o jogador solte as teclas
+
+ESTRUTURAS E TIPOS (STRUCTS):
+    Player = pacote de dados (struct) que agrupa todas as variáveis do jogador (posição, velocidade, informações do dash). Facilita enviar as informações do jogador de um arquivo para o outro
+
+FUNÇÕES DO JOGADOR (CRIADAS POR NÓS NO PLAYER.C):
+    InitPlayer = preenche a variável do tipo Player com os dados iniciais do jogo (coloca no meio da tela, zera os contadores de dash)
+    UpdatePlayer = engloba toda a matemática da movimentação, leitura do teclado, cálculo de deltaTime, ativação do dash e diminuição do tempo de recarga
+    DrawPlayer = cuida exclusivamente de checar o status do jogador (se está em dash, em recarga ou normal) e desenha os círculos correspondentes na tela
+
+FUNÇÕES DO RAYLIB E RAYMATH UTILIZADAS:
+    InitWindow = abre a janela do jogo e define o tamanho e título
+    SetTargetFPS = trava a taxa de atualização do jogo em um limite (ex: 60 frames por segundo)
+
+    WindowShouldClose = retorna verdadeiro se o jogador clicou no X de fechar a janela ou apertou ESC
+    GetFrameTime = pega o tempo do frame para alimentar a nossa variável deltaTime
+
+    IsKeyDown = verifica se uma tecla está sendo segurada (usado para o movimento constante de andar)
+    IsKeyPressed = verifica se a tecla foi apertada uma única vez naquele exato frame (usado para acionar o dash uma vez só)
+
+    Vector2Normalize = função matemática que encurta vetores diagonais. Evita que andar para Cima+Direita faça o personagem correr mais rápido do que andar em linha reta
+    BeginDrawing = avisa a placa de vídeo que vamos começar a "pintar" o frame atual
+
+    ClearBackground = pinta a tela inteira de uma cor sólida para apagar o "rastro" do frame passado
+    DrawCircleV = desenha um círculo sólido usando um Vector2 como coordenadas centrais
+
+    DrawCircleGradient = desenha um círculo que começa com uma cor no miolo e faz um degradê até as bordas
+    DrawText = desenha frases na tela
+
+    TextFormat = mistura texto com variáveis (semelhante ao printf) para conseguir imprimir os números dos cronômetros na tela
+    EndDrawing = finaliza a pintura e empurra a imagem pronta para o monitor do jogador
+    
+    CloseWindow = destroi a janela do jogo e libera a memória quando o programa encerra
