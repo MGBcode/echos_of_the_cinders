@@ -13,6 +13,8 @@ typedef struct {
     float dashTimeCounter;
     float cooldownTimeCounter;
     Vector2 dashDirection;
+    Vector2 lastMovingDir;
+    float diagonalBufferTimer;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);

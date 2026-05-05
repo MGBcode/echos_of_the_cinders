@@ -6,11 +6,12 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->normalSpeed = 200.0f;
     player->isDashing = false;
     player->dashSpeedMultiplier = 4.0f;
-    player->dashDuration = 0.25f;
+    player->dashDuration = 0.20f;
     player->dashCooldown = 0.5f;
     player->dashTimeCounter = 0.0f;
     player->cooldownTimeCounter = 0.0f;
     player->dashDirection = (Vector2){ 0, 0 };
+    player->lastMovingDir = (Vector2){ 1.0f, 0.0f };
 }
 void UpdatePlayer(Player *player, float deltaTime) {
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f) {
@@ -24,11 +25,29 @@ void UpdatePlayer(Player *player, float deltaTime) {
     if (IsKeyDown(KEY_W))    inputDir.y -= 1.0f;
     inputDir = Vector2Normalize(inputDir);
 
+    bool isInputDiagonal = (inputDir.x != 0.0f && inputDir.y != 0.0f);
+    
+    if (inputDir.x != 0.0f || inputDir.y != 0.0f) {
+        
+        if (isInputDiagonal) {
+            player->lastMovingDir = inputDir;
+            player->diagonalBufferTimer = 0; 
+        } else {
+            player->diagonalBufferTimer += deltaTime;
+            bool wasLastDirDiagonal = (player->lastMovingDir.x != 0.0f && player->lastMovingDir.y != 0.0f);
+            
+            if (player->diagonalBufferTimer > 0.1f || !wasLastDirDiagonal) {
+                player->lastMovingDir = inputDir;
+            }
+        }
+    } else {
+        player->diagonalBufferTimer = 0;
+    }
     if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         if (inputDir.x == 0.0f && inputDir.y == 0.0f) {
-            player->dashDirection = (Vector2){ 1.0f, 0.0f }; 
+            player->dashDirection = player->lastMovingDir; 
         } else {
             player->dashDirection = inputDir;
         }

@@ -22,6 +22,8 @@ VARIÁVEIS DO DASH:
 
     cooldownTimeCounter = cronômetro que faz a contagem regressiva do tempo de recarga após o fim de um dash. O jogador só pode dar um novo dash quando essa variável chegar a zero ou menos
     dashDirection = direção do dash congelada no momento da ativação, garantindo que o dash siga reto mesmo que o jogador solte as teclas
+    lasMovingDir = serve para salvar a ultima direção que o player andou,pra caso o player dê dash sem se movimentar,ele ir na direção da ultima andada que ele deu
+    diagonalBufferTimer = Timer para validar mudança de direção
 
 ESTRUTURAS E TIPOS (STRUCTS):
     Player = pacote de dados (struct) que agrupa todas as variáveis do jogador (posição, velocidade, informações do dash). Facilita enviar as informações do jogador de um arquivo para o outro
