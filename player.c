@@ -36,7 +36,7 @@ void UpdatePlayer(Player *player, float deltaTime) {
             player->diagonalBufferTimer += deltaTime;
             bool wasLastDirDiagonal = (player->lastMovingDir.x != 0.0f && player->lastMovingDir.y != 0.0f);
             
-            if (player->diagonalBufferTimer > 0.1f || !wasLastDirDiagonal) {
+            if (player->diagonalBufferTimer > 0.05f || !wasLastDirDiagonal) {
                 player->lastMovingDir = inputDir;
             }
         }
