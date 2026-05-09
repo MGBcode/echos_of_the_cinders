@@ -12,6 +12,11 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->cooldownTimeCounter = 0.0f;
     player->dashDirection = (Vector2){ 0, 0 };
     player->lastMovingDir = (Vector2){ 1.0f, 0.0f };
+    player->comboStep = 0;
+    player->attackTimer = 0.3f;
+    player->comboWindowTimer = 0.5f;
+    player->cooldownattackTimer = 0.0f;
+    player->cooldowncomboWindowTimer = 0.0f;
 }
 void UpdatePlayer(Player *player, float deltaTime) {
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f) {
@@ -43,7 +48,7 @@ void UpdatePlayer(Player *player, float deltaTime) {
     } else {
         player->diagonalBufferTimer = 0;
     }
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f) {
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->cooldowncomboWindowTimer == 0.0f) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         if (inputDir.x == 0.0f && inputDir.y == 0.0f) {
@@ -52,6 +57,22 @@ void UpdatePlayer(Player *player, float deltaTime) {
             player->dashDirection = inputDir;
         }
     }
+    if (IsKeyPressed(MOUSE_BUTTON_LEFT)&& player->comboStep == 0 &&!player->isDashing && player->cooldowncomboWindowTimer == 0.0f)
+    {
+        player->comboStep += 1;
+        player->cooldownattackTimer = 0.0f;
+    }
+    if (player->comboStep > 0 )
+    {
+        player->cooldownattackTimer += deltaTime;
+        if (IsKeyPressed(MOUSE_BUTTON_LEFT) && player->cooldownattackTimer)
+        {
+            
+        }
+        
+    }
+    
+    
 
     if (player->isDashing) {
         player->pos.x += player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
@@ -62,7 +83,12 @@ void UpdatePlayer(Player *player, float deltaTime) {
             player->isDashing = false;
             player->cooldownTimeCounter = player->dashCooldown;
         }
-    } else {
+    } 
+    else if (player->comboStep == 3) {
+        player->pos.x += player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
+        player->pos.y += player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
+    } 
+    else if (player->comboStep == 0) {
         player->pos.x += inputDir.x * player->normalSpeed * deltaTime;
         player->pos.y += inputDir.y * player->normalSpeed * deltaTime;
     }

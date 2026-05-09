@@ -15,6 +15,11 @@ typedef struct {
     Vector2 dashDirection;
     Vector2 lastMovingDir;
     float diagonalBufferTimer;
+    int comboStep;
+    float attackTimer;
+    float cooldownattackTimer;
+    float cooldowncomboWindowTimer;
+    float comboWindowTimer;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);
