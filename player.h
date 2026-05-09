@@ -20,6 +20,9 @@ typedef struct {
     float cooldownattackTimer;
     float cooldowncomboWindowTimer;
     float comboWindowTimer;
+    Vector2 hitboxCenter;
+    float hitboxRadius;
+    bool isHitboxActive;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);

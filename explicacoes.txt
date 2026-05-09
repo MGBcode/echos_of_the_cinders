@@ -22,15 +22,21 @@ VARIÁVEIS DO DASH:
 
     cooldownTimeCounter = cronômetro que faz a contagem regressiva do tempo de recarga após o fim de um dash. O jogador só pode dar um novo dash quando essa variável chegar a zero ou menos
     dashDirection = direção do dash congelada no momento da ativação, garantindo que o dash siga reto mesmo que o jogador solte as teclas
+    
     lasMovingDir = serve para salvar a ultima direção que o player andou,pra caso o player dê dash sem se movimentar,ele ir na direção da ultima andada que ele deu
     diagonalBufferTimer = Timer para validar mudança de direção
 
 VARIÁVEIS DOS ATAQUES LEVE:
     comboStep = é um inteiro acumulativo que funciona como se fosse uma marcha,ela vai de 0 a 3 e representa em ques estado do combo o cavaleiro está
     attackTimer = é o tempo de duração do ataque(tempo que leva do inicio do ataque até o final da ação de atacar)
+    
     comboWindowTimer = é o tempo de cooldown após o attackTimer,pois após o personagem atacar ele precisa voltar a uma posição inicial para voltar a receber inputs,tbm serve como janela de tempo em que se o jogador apertar o botão de ataque dnv,o combo continuará
     cooldownattackTimer = cronômetro que faz a contagem regressiva do attackTimer
+    
     cooldowncomboWindowTimer = cronômetro que faz a contagem regressiva do comboWindowTimer
+    hitboxCenter = 
+    hitboxRadius = 
+    isHitboxActive = serve para o código saber se o cavaleiro está em estado de ataque ou não,para entao poder criar as hitboxes
 ESTRUTURAS E TIPOS (STRUCTS):
     Player = pacote de dados (struct) que agrupa todas as variáveis do jogador (posição, velocidade, informações do dash). Facilita enviar as informações do jogador de um arquivo para o outro
 

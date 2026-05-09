@@ -17,6 +17,9 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->comboWindowTimer = 0.5f;
     player->cooldownattackTimer = 0.0f;
     player->cooldowncomboWindowTimer = 0.0f;
+    player->isHitboxActive = false;
+    player->hitboxRadius = 0.0f;
+    player->hitboxCenter = (Vector2){ 0, 0 };
 }
 void UpdatePlayer(Player *player, float deltaTime) {
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f) {
@@ -57,23 +60,48 @@ void UpdatePlayer(Player *player, float deltaTime) {
             player->dashDirection = inputDir;
         }
     }
-    if (IsKeyPressed(MOUSE_BUTTON_LEFT)&& player->comboStep == 0 &&!player->isDashing && player->cooldowncomboWindowTimer == 0.0f)
-    {
-        player->comboStep += 1;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing) {
+        player->comboStep = 1;
         player->cooldownattackTimer = 0.0f;
+        player->cooldowncomboWindowTimer = 0.0f;
     }
-    if (player->comboStep > 0 )
-    {
-        player->cooldownattackTimer += deltaTime;
-        if (IsKeyPressed(MOUSE_BUTTON_LEFT) && player->cooldownattackTimer)
-        {
-            
-        }
+    if (player->comboStep > 0) {
         
+        if (player->cooldownattackTimer < player->attackTimer) {
+            player->cooldownattackTimer += deltaTime;
+            player->isHitboxActive = true;
+            float distFront = 0.0f;
+            if (player->comboStep == 1 || player->comboStep == 2) {
+                player->hitboxRadius = 35.0f;
+                distFront = 20.0f;
+            } else if (player->comboStep == 3) {
+                player->hitboxRadius = 15.0f;
+                distFront = 40.0f;
+            }
+            player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
+            player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
+
+            // FUTURO: Aqui usaremos CheckCollisionCircleRec(player->hitboxCenter, player->hitboxRadius, bossRec)
+
+        }
+        else {
+            player->isHitboxActive = false;
+            player->cooldowncomboWindowTimer += deltaTime;
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep < 3) {
+                player->comboStep += 1;
+                player->cooldownattackTimer = 0.0f;      
+                player->cooldowncomboWindowTimer = 0.0f; 
+            }
+            else if (player->cooldowncomboWindowTimer >= player->comboWindowTimer) {
+                player->comboStep = 0; 
+                player->cooldownattackTimer = 0.0f;
+                player->cooldowncomboWindowTimer = 0.0f;
+            }
+        }
+    } else {
+        player->isHitboxActive = false;
     }
     
-    
-
     if (player->isDashing) {
         player->pos.x += player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
         player->pos.y += player->dashDirection.y * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
@@ -101,4 +129,7 @@ void DrawPlayer(Player player) {
 
     DrawCircleV(player.pos, 15, playerOuterColor);
     DrawCircleGradient(player.pos, 10.0f, ORANGE, playerOuterColor);
+    if (player.isHitboxActive) {
+        DrawCircleLines((int)player.hitboxCenter.x, (int)player.hitboxCenter.y, player.hitboxRadius, RED);
+    }
 }
