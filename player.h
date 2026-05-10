@@ -2,9 +2,11 @@
 #define PLAYER_H
 
 #include "raylib.h"
+#include "level.h"
 
 typedef struct {
-    Vector2 pos;
+    Vector2 pos;       
+    Vector2 tile_pos;   
     float normalSpeed;
     bool isDashing;
     float dashSpeedMultiplier;
@@ -24,10 +26,11 @@ typedef struct {
     float hitboxRadius;
     bool isHitboxActive;
     bool hasHitEnemy;
+    float raio;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);
-void UpdatePlayer(Player *player, float deltaTime);
+void UpdatePlayer(Player *player, float deltaTime, Level *level);
 void DrawPlayer(Player player);
 
 #endif
