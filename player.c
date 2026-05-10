@@ -20,6 +20,7 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->isHitboxActive = false;
     player->hitboxRadius = 0.0f;
     player->hitboxCenter = (Vector2){ 0, 0 };
+    player->hasHitEnemy = false;
 }
 void UpdatePlayer(Player *player, float deltaTime) {
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f) {
@@ -51,9 +52,13 @@ void UpdatePlayer(Player *player, float deltaTime) {
     } else {
         player->diagonalBufferTimer = 0;
     }
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->cooldowncomboWindowTimer == 0.0f) {
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (player->comboStep == 0 || !player->hasHitEnemy)) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
+        player->isHitboxActive = false;
+        player->cooldownattackTimer = 0.0f;
+        player->cooldowncomboWindowTimer = 0.0f;
+
         if (inputDir.x == 0.0f && inputDir.y == 0.0f) {
             player->dashDirection = player->lastMovingDir; 
         } else {
@@ -64,6 +69,7 @@ void UpdatePlayer(Player *player, float deltaTime) {
         player->comboStep = 1;
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
+        player->hasHitEnemy = false;
     }
     if (player->comboStep > 0) {
         
@@ -80,17 +86,15 @@ void UpdatePlayer(Player *player, float deltaTime) {
             }
             player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
             player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
-
-            // FUTURO: Aqui usaremos CheckCollisionCircleRec(player->hitboxCenter, player->hitboxRadius, bossRec)
-
-        }
+        }   
         else {
             player->isHitboxActive = false;
             player->cooldowncomboWindowTimer += deltaTime;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep < 3) {
                 player->comboStep += 1;
                 player->cooldownattackTimer = 0.0f;      
-                player->cooldowncomboWindowTimer = 0.0f; 
+                player->cooldowncomboWindowTimer = 0.0f;
+                player->hasHitEnemy = false; 
             }
             else if (player->cooldowncomboWindowTimer >= player->comboWindowTimer) {
                 player->comboStep = 0; 

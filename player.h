@@ -23,6 +23,7 @@ typedef struct {
     Vector2 hitboxCenter;
     float hitboxRadius;
     bool isHitboxActive;
+    bool hasHitEnemy;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);

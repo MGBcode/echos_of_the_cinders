@@ -34,9 +34,11 @@ VARIÁVEIS DOS ATAQUES LEVE:
     cooldownattackTimer = cronômetro que faz a contagem regressiva do attackTimer
     
     cooldowncomboWindowTimer = cronômetro que faz a contagem regressiva do comboWindowTimer
-    hitboxCenter = 
-    hitboxRadius = 
+    hitboxCenter = Ela define o ponto exato no mapa onde o ataque do player está acontecendo naquele frame.
+    hitboxRadius = define o alcance ou a largura do golpe do cavaleiro.
     isHitboxActive = serve para o código saber se o cavaleiro está em estado de ataque ou não,para entao poder criar as hitboxes
+    hasHitEnemy = serve para dizer se o cavaleiro está atualmente acertando um hit ou nn em um inimigo
+
 ESTRUTURAS E TIPOS (STRUCTS):
     Player = pacote de dados (struct) que agrupa todas as variáveis do jogador (posição, velocidade, informações do dash). Facilita enviar as informações do jogador de um arquivo para o outro
 
