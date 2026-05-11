@@ -70,3 +70,23 @@ FUNÇÕES DO RAYLIB E RAYMATH UTILIZADAS:
     EndDrawing = finaliza a pintura e empurra a imagem pronta para o monitor do jogador
     
     CloseWindow = destroi a janela do jogo e libera a memória quando o programa encerra
+
+MÓDULO DE MAPA (level.h e level.c)
+
+    --> LARGURA_MAPA e ALTURA_MAPA
+    São as constantes (#define) que dizem quantos "blocos" o mapa tem de comprimento e altura. Se aumentar esses números, os blocos encolhem e a arena fica maior visualmente.
+
+    --> enum TipeTile
+    É a lista de "identidades" que um bloco pode ter (TILE_VAZIO, TILE_PAREDE, TILE_PORTA, etc).
+
+    --> struct Level
+    A estrutura principal do mapa. Ela guarda a "grade" (uma matriz/tabela bidimensional que é a planta baixa da sala) e guarda também o tamanho matemático de cada bloco em pixels (tamanho_tile).
+
+    --> level_iniciar()
+    É o setup inicial. Ele varre a grade inteira usando "for". Se a posição for na borda da matriz (x=0 ou y=0), ele coloca uma parede. Se for no meio, coloca chão vazio.
+
+    --> level_atualizar_tile()
+    Faz a matemática responsiva: pega o tamanho da janela (GetScreenWidth) e divide pela quantidade de colunas. Isso garante que o mapa sempre estique e ocupe 100% da tela perfeitamente, sem sobrar espaço preto.
+
+    --> level_desenhar()
+    É o "pintor". Ele roda a 60 frames por segundo dentro da main. Ele varre a matriz inteira e, usando um switch-case, escolhe uma cor dependendo do TipeTile que estiver salvo naquele quadrado, pintando-o na tela com DrawRectangle().
