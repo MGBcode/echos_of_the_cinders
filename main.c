@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "player.h"
 #include "level.h"
+#include "enemy.h"
 
 int main(void) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
@@ -15,6 +16,9 @@ int main(void) {
 
     Level level;
     level_iniciar(&level);
+
+    Boss boss;
+    Boss_Init(&boss, (Vector2){ 600, 300 });
 
     SetTargetFPS(60);
 
@@ -37,12 +41,14 @@ int main(void) {
 
         float deltaTime = GetFrameTime();
         UpdatePlayer(&cavaleiro, deltaTime, &level);
+        Boss_Update(&boss, deltaTime, cavaleiro.pos, cavaleiro.raio, &level);
 
         BeginDrawing();
             ClearBackground(BLACK);
             
             level_desenhar(&level);
             DrawPlayer(cavaleiro);
+            Boss_Draw(&boss);
             
             DrawText("Aperte ESPACO para Dash", 20, 20, 20, LIGHTGRAY);
             DrawText(TextFormat("FPS: %i", GetFPS()), GetScreenWidth() - 100, 20, 20, GREEN);
