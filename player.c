@@ -2,8 +2,17 @@
 #include "raymath.h"
 #include "level.h"
 
+bool PodeMoverPara(Level *level, float px, float py, float raio, int tw, int th) {
+    int esq   = (int)((px - raio) / tw);
+    int dir   = (int)((px + raio) / tw);
+    int cima  = (int)((py - raio) / th);
+    int baixo = (int)((py + raio) / th);
+    return level_pode_mover(level, esq, cima) &&
+           level_pode_mover(level, dir, cima) &&
+           level_pode_mover(level, esq, baixo) &&
+           level_pode_mover(level, dir, baixo);
+}
 void InitPlayer(Player *player, int screenWidth, int screenHeight) {
-    player->tile_pos = (Vector2){ LARGURA_MAPA / 2.0f, ALTURA_MAPA / 2.0f };
     player->pos = (Vector2){ (float)screenWidth/2, (float)screenHeight/2 };
     player->normalSpeed = 200.0f;
     player->isDashing = false;
@@ -29,15 +38,9 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
-
-    player->pos.x = player->tile_pos.x * tw;
-    player->pos.y = player->tile_pos.y * th;
-
     player->raio = ((tw + th) / 2) * 0.3f;
     player->normalSpeed = ((tw + th) / 2) * 3.5f;
-
     float r = player->raio * 1.2f;
-
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
         player->cooldownTimeCounter -= deltaTime;
 
@@ -63,24 +66,20 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     } else {
         player->diagonalBufferTimer = 0;
     }
-
     if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (player->comboStep == 0 || !player->hasHitEnemy)) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         player->isHitboxActive = false;
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
-        player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f)
-            ? player->lastMovingDir : inputDir;
+        player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
     }
-
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing) {
         player->comboStep = 1;
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
         player->hasHitEnemy = false;
     }
-
     if (player->comboStep > 0) {
         if (player->cooldownattackTimer < player->attackTimer) {
             player->cooldownattackTimer += deltaTime;
@@ -112,73 +111,35 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     } else {
         player->isHitboxActive = false;
     }
+    float velX = 0;
+    float velY = 0;
 
     if (player->isDashing) {
-        float novo_x = player->pos.x + player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
-        float novo_y = player->pos.y + player->dashDirection.y * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
-
-        if (level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y - r) / th)) &&
-            level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y - r) / th)) &&
-            level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y + r) / th)) &&
-            level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y + r) / th))) {
-            player->pos.x = novo_x;
-            player->tile_pos.x = novo_x / tw;
-        }
-        if (level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y - r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y - r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y + r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y + r) / th))) {
-            player->pos.y = novo_y;
-            player->tile_pos.y = novo_y / th;
-        }
-
+        velX = player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
+        velY = player->dashDirection.y * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
+        
         player->dashTimeCounter += deltaTime;
         if (player->dashTimeCounter >= player->dashDuration) {
             player->isDashing = false;
             player->cooldownTimeCounter = player->dashCooldown;
         }
     } else if (player->comboStep == 3) {
-        float novo_x = player->pos.x + player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
-        float novo_y = player->pos.y + player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
-
-        if (level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y - r) / th)) &&
-            level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y - r) / th)) &&
-            level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y + r) / th)) &&
-            level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y + r) / th))) {
-            player->pos.x = novo_x;
-            player->tile_pos.x = novo_x / tw;
-        }
-        if (level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y - r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y - r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y + r) / th)) &&
-            level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y + r) / th))) {
-            player->pos.y = novo_y;
-            player->tile_pos.y = novo_y / th;
-        }
+        velX = player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
+        velY = player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
     } else if (player->comboStep == 0) {
-        float novo_x = player->pos.x + inputDir.x * player->normalSpeed * deltaTime;
-        float novo_y = player->pos.y + inputDir.y * player->normalSpeed * deltaTime;
+        velX = inputDir.x * player->normalSpeed * deltaTime;
+        velY = inputDir.y * player->normalSpeed * deltaTime;
+    }
+    float novo_x = player->pos.x + velX;
+    float novo_y = player->pos.y + velY;
 
-        if (inputDir.x != 0.0f)
-            if (level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y - r) / th)) &&
-                level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y - r) / th)) &&
-                level_pode_mover(level, (int)((novo_x - r) / tw), (int)((player->pos.y + r) / th)) &&
-                level_pode_mover(level, (int)((novo_x + r) / tw), (int)((player->pos.y + r) / th))) {
-                player->pos.x = novo_x;
-                player->tile_pos.x = novo_x / tw;
-            }
-
-        if (inputDir.y != 0.0f)
-            if (level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y - r) / th)) &&
-                level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y - r) / th)) &&
-                level_pode_mover(level, (int)((player->pos.x - r) / tw), (int)((novo_y + r) / th)) &&
-                level_pode_mover(level, (int)((player->pos.x + r) / tw), (int)((novo_y + r) / th))) {
-                player->pos.y = novo_y;
-                player->tile_pos.y = novo_y / th;
-            }
+    if (velX != 0.0f && PodeMoverPara(level, novo_x, player->pos.y, r, tw, th)) {
+        player->pos.x = novo_x;
+    }
+    if (velY != 0.0f && PodeMoverPara(level, player->pos.x, novo_y, r, tw, th)) {
+        player->pos.y = novo_y;
     }
 }
-
 void DrawPlayer(Player player) {
     Color playerOuterColor = MAROON;
     if (player.isDashing) playerOuterColor = WHITE;
