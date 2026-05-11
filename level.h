@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 
-// Aumentamos a grade para os quadrados ficarem menores
 #define LARGURA_MAPA  25
 #define ALTURA_MAPA   19
 

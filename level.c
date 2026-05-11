@@ -2,8 +2,14 @@
 #include <raylib.h>
 
 void level_atualizar_tile(Level *level) {
-    level->tamanho_tile   = GetScreenWidth()  / LARGURA_MAPA;
-    level->tamanho_tile_h = (GetScreenHeight() - 2) / ALTURA_MAPA;
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+    
+    if (sw <= 0) sw = 800;
+    if (sh <= 0) sh = 600;
+
+    level->tamanho_tile   = sw / LARGURA_MAPA;
+    level->tamanho_tile_h = sh / ALTURA_MAPA;
 }
 
 void level_iniciar(Level *level) {
