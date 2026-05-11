@@ -1,31 +1,27 @@
 #include "level.h"
 #include <raylib.h>
 
-
-static int mapa_base[ALTURA_MAPA][LARGURA_MAPA] = {
-    {1,1,1,1,1,1,1,1,1,1,1,1,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1,1},
-};
-
 void level_atualizar_tile(Level *level) {
-    level->tamanho_tile   = GetScreenWidth()  / LARGURA_MAPA;
-    level->tamanho_tile_h = (GetScreenHeight() - 2) / ALTURA_MAPA;
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+    
+    if (sw <= 0) sw = 800;
+    if (sh <= 0) sh = 600;
+
+    level->tamanho_tile   = sw / LARGURA_MAPA;
+    level->tamanho_tile_h = sh / ALTURA_MAPA;
 }
 
 void level_iniciar(Level *level) {
-    for (int y = 0; y < ALTURA_MAPA; y++)
-        for (int x = 0; x < LARGURA_MAPA; x++)
-            level->grade[y][x] = (TipeTile)mapa_base[y][x];
-
+    for (int y = 0; y < ALTURA_MAPA; y++) {
+        for (int x = 0; x < LARGURA_MAPA; x++) {
+            if (y == 0 || y == ALTURA_MAPA - 1 || x == 0 || x == LARGURA_MAPA - 1) {
+                level->grade[y][x] = TILE_PAREDE;
+            } else {
+                level->grade[y][x] = TILE_VAZIO;
+            }
+        }
+    }
     level_atualizar_tile(level);
 }
 

@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#define LARGURA_MAPA  13
-#define ALTURA_MAPA   11
+#define LARGURA_MAPA  25
+#define ALTURA_MAPA   19
 
 typedef enum {
     TILE_VAZIO,
