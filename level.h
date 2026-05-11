@@ -3,8 +3,9 @@
 
 #include <stdbool.h>
 
-#define LARGURA_MAPA  13
-#define ALTURA_MAPA   11
+// Aumentamos a grade para os quadrados ficarem menores
+#define LARGURA_MAPA  25
+#define ALTURA_MAPA   19
 
 typedef enum {
     TILE_VAZIO,
