@@ -90,3 +90,57 @@ MÓDULO DE MAPA (level.h e level.c)
 
     --> level_desenhar()
     É o "pintor". Ele roda a 60 frames por segundo dentro da main. Ele varre a matriz inteira e, usando um switch-case, escolhe uma cor dependendo do TipeTile que estiver salvo naquele quadrado, pintando-o na tela com DrawRectangle().
+
+    ============================================================
+ARQUIVOS: enemy.h / enemy.c
+OBJETIVO: Implementação do sistema de Inteligência Artificial e Combate do Boss.
+============================================================
+
+1. ESTRUTURAS PRINCIPAIS
+------------------------------------------------------------
+- BossState (Enum): Gerencia a Máquina de Estados do inimigo.
+    * WANDER: Movimentação aleatória inicial.
+    * ALERT: Transição ao detectar o jogador.
+    * COMBAT: Perseguição ativa.
+    * ATTACK_LIGHT/BRUTAL: Estados de execução de golpes.
+    * COOLDOWN: Janela de vulnerabilidade após atacar.
+
+- AttackCircle: Define a área de impacto (hitbox) dos ataques do Boss.
+    * center/radius: Localização e tamanho do golpe.
+    * damage: Quantidade de vida subtraída do player.
+    * active: Flag que determina se o dano deve ser processado.
+
+- Boss (Struct): Armazena todos os dados do inimigo, incluindo HP, 
+  posição, velocidades e temporizadores de cada fase de ataque.
+
+2. FUNÇÕES DE LÓGICA (enemy.c)
+------------------------------------------------------------
+- Boss_Init: 
+    Inicializa o Boss com seus atributos de vida e combate. 
+    Configura os tempos de 'windup' (preparação) e 'recovery' 
+    (recuperação) para equilibrar a dificuldade.
+
+- Boss_Update: 
+    Executa a cada frame. Controla a visão do Boss (aggroRadius) 
+    e a lógica de movimentação com colisão. Gerencia a transição 
+    entre estados e o processamento de dano ao colidir com o Player.
+
+- MoveWithCollision: 
+    Sistema de física simples que permite ao Boss deslizar em 
+    paredes ao colidir, tratando os eixos X e Y de forma independente.
+
+3. SISTEMA DE COMBATE
+------------------------------------------------------------
+- Ataque Leve: Golpe rápido com pouco tempo de preparação.
+- Ataque Brutal: Inclui uma investida (lunge) em direção à 
+  última posição conhecida do jogador, causando dano alto.
+- Feedback Visual: O Boss altera sua cor via código conforme o 
+  estado (Alerta, Ataque ou Dano) para informar o jogador.
+
+4. VARIÁVEIS GLOBAIS / CONSTANTES LÓGICAS
+------------------------------------------------------------
+- LARGURA_MAPA / ALTURA_MAPA: Usadas para cálculos de colisão 
+  com o cenário (provenientes do level.h).
+- deltaTime (dt): Garante que a velocidade do Boss e seus 
+  ataques sejam consistentes independente do FPS.
+============================================================
