@@ -28,8 +28,17 @@ int main(void) {
         float deltaTime = GetFrameTime();
 
         // SÓ atualiza os cálculos do mapa se a janela mudar de tamanho
-        if (GetScreenWidth() != lastScreenWidth || GetScreenHeight() != lastScreenHeight) {
+        if (IsWindowResized() || GetScreenWidth() != lastScreenWidth) {
+            float scaleX = (float)GetScreenWidth() / lastScreenWidth;
+            float scaleY = (float)GetScreenHeight() / lastScreenHeight;
+            
+            // Ajusta a posição do jogador proporcionalmente
+            cavaleiro.pos.x *= scaleX;
+            cavaleiro.pos.y *= scaleY;
+            
+            // Atualiza as métricas do mapa e do player
             level_atualizar_tile(&level);
+            
             lastScreenWidth = GetScreenWidth();
             lastScreenHeight = GetScreenHeight();
         }

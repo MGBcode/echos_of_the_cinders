@@ -5,6 +5,7 @@ void level_atualizar_tile(Level *level) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
     
+    // Evita divisão por zero se a janela estiver minimizada
     if (sw <= 0) sw = 800;
     if (sh <= 0) sh = 600;
 
