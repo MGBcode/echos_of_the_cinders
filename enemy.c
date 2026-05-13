@@ -174,7 +174,9 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             if (b->atk.active && !b->hasHitPlayerThisAttack) {
                 if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                     b->hasHitPlayerThisAttack = true;
-                    printf("[HIT] Brutal acertou o player: -%d HP\n", b->brutalDamage);
+
+                    // Antes: -%d
+                    printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
                 }
             }
 
@@ -219,7 +221,9 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             if (b->atk.active && !b->hasHitPlayerThisAttack) {
                 if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                     b->hasHitPlayerThisAttack = true;
-                    printf("[HIT] Leve acertou o player: -%d HP\n", b->lightDamage);
+
+                    // Antes: -%d
+                    printf("[HIT] Leve acertou o player: %d HP\n", b->lightDamage);
                 }
             }
 
@@ -260,7 +264,6 @@ void Boss_Draw(const Boss *b) {
         DrawCircleLines((int)b->atk.center.x, (int)b->atk.center.y, b->atk.radius, RAYWHITE);
     }
 
-    // HP do boss no canto oposto ao dash
-    DrawText(TextFormat("BOSS HP: %d/%d", b->hp, b->hpMax),
-             GetScreenWidth() - 220, 20, 20, LIGHTGRAY);
+    // REMOVIDO: HUD de HP do boss daqui.
+    // A HUD vai ser desenhada na main, abaixo do FPS.
 }
