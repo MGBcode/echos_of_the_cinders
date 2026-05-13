@@ -27,12 +27,26 @@ typedef struct {
     float hitboxRadius;
     bool isHitboxActive;
     bool hasHitEnemy;
+    // HUD - Vida e Estamina
+    int hp;
+    int hpMax;
+    float stamina;
+    float staminaMax;
+    float staminaRecoveryDelay;
+    float staminaRecoveryDelayCounter;
+    float staminaRecoveryRate;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);
 
-void UpdatePlayer(Player *player, float deltaTime, Level *level); 
+void UpdatePlayer(Player *player, float deltaTime, Level *level);
 
 void DrawPlayer(Player player);
+
+// Funções de HUD - Vida e Estamina
+void PlayerTakeDamage(Player *player, int damage);
+void PlayerUseStamina(Player *player, float amount);
+void UpdatePlayerStamina(Player *player, float deltaTime);
+void DrawPlayerHUD(const Player *player, int x, int y);
 
 #endif

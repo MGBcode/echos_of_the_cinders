@@ -51,6 +51,9 @@ int main(void) {
 
     // Anti-multi-hit: aplica dano 1x por ativação da hitbox
     bool lastHitboxActive = false;
+    
+    // Anti-multi-hit: aplica dano 1x por ativação do ataque do boss
+    bool lastBossAttackActive = false;
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
@@ -77,6 +80,7 @@ int main(void) {
         // Dano no boss por colisão com hitbox do player (sem mexer no player)
         // Observação: aqui o dano é fixo só para validar HUD/feedback.
         const int PLAYER_DEBUG_DAMAGE = 10;
+        const int BOSS_ATTACK_DAMAGE = 15;
 
         bool hitboxActiveNow = cavaleiro.isHitboxActive;
 
@@ -91,6 +95,19 @@ int main(void) {
 
         lastHitboxActive = hitboxActiveNow;
 
+        // Dano no player por ataque do boss
+        AttackCircle bossAttack;
+        bool bossAttackActive = Boss_GetAttackCircle(&boss, &bossAttack);
+        
+        if (bossAttackActive && !lastBossAttackActive && cavaleiro.hp > 0) {
+            if (CheckCollisionCircles(bossAttack.center, bossAttack.radius,
+                                      cavaleiro.pos, cavaleiro.raio)) {
+                PlayerTakeDamage(&cavaleiro, BOSS_ATTACK_DAMAGE);
+            }
+        }
+        
+        lastBossAttackActive = bossAttackActive;
+
         BeginDrawing();
             ClearBackground(BLACK);
             level_desenhar(&level);
@@ -104,6 +121,11 @@ int main(void) {
             // HUD do boss logo abaixo do FPS
             // (abaixo da linha do FPS e sem conflitar com o texto do fullscreen)
             DrawBossHUD(&boss, 10, 70);
+            
+            // HUD do player (canto superior direito)
+            int playerHudX = GetScreenWidth() - 240;
+            int playerHudY = 10;
+            DrawPlayerHUD(&cavaleiro, playerHudX, playerHudY);
         EndDrawing();
     }
 

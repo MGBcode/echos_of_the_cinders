@@ -35,6 +35,15 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->hitboxCenter = (Vector2){ 0, 0 };
     player->hasHitEnemy = false;
     player->raio = 15.0f;
+    
+    // HUD - Vida e Estamina
+    player->hpMax = 100;
+    player->hp = player->hpMax;
+    player->staminaMax = 100.0f;
+    player->stamina = player->staminaMax;
+    player->staminaRecoveryDelay = 2.0f;
+    player->staminaRecoveryDelayCounter = 0.0f;
+    player->staminaRecoveryRate = 20.0f; // 20 pontos por segundo
 }
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
@@ -43,6 +52,9 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
 
     player->raio = ((tw + th) / 2) * 0.3f;
     player->normalSpeed = ((tw + th) / 2) * 3.5f;
+    
+    // Atualizar estamina
+    UpdatePlayerStamina(player, deltaTime);
     
     float r = player->raio * 1.2f;
 
@@ -79,6 +91,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
         player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
+        PlayerUseStamina(player, 25.0f); // Consome 25 pontos de estamina
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing) {
@@ -86,6 +99,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
         player->hasHitEnemy = false;
+        PlayerUseStamina(player, 15.0f); // Consome 15 pontos de estamina por ataque
     }
 
     if (player->comboStep > 0) {
@@ -161,4 +175,71 @@ void DrawPlayer(Player player) {
     if (player.isHitboxActive) {
         DrawCircleLines((int)player.hitboxCenter.x, (int)player.hitboxCenter.y, player.hitboxRadius, RED);
     }
+}
+
+// HUD - Funções de Vida e Estamina
+void PlayerTakeDamage(Player *player, int damage) {
+    player->hp -= damage;
+    if (player->hp < 0) player->hp = 0;
+}
+
+void PlayerUseStamina(Player *player, float amount) {
+    player->stamina -= amount;
+    if (player->stamina < 0.0f) player->stamina = 0.0f;
+    
+    // Reset do delay de recuperação quando consome estamina
+    player->staminaRecoveryDelayCounter = 0.0f;
+}
+
+void UpdatePlayerStamina(Player *player, float deltaTime) {
+    // Aumentar o contador de delay
+    if (player->staminaRecoveryDelayCounter < player->staminaRecoveryDelay) {
+        player->staminaRecoveryDelayCounter += deltaTime;
+    } else {
+        // Se passou 2 segundos sem atacar/fazer dash, recuperar estamina
+        player->stamina += player->staminaRecoveryRate * deltaTime;
+        if (player->stamina > player->staminaMax) {
+            player->stamina = player->staminaMax;
+        }
+    }
+}
+
+void DrawPlayerHUD(const Player *player, int x, int y) {
+    // --- VIDA ---
+    DrawText(TextFormat("HP: %d/%d", player->hp, player->hpMax), x, y, 20, LIGHTGRAY);
+    
+    const int barW = 220;
+    const int barH = 14;
+    const int barY = y + 24;
+    
+    // Barra de vida - fundo
+    DrawRectangle(x, barY, barW, barH, (Color){ 40, 40, 40, 220 });
+    DrawRectangleLines(x, barY, barW, barH, (Color){ 110, 110, 110, 255 });
+    
+    // Barra de vida - preenchimento
+    float hpRatio = (float)player->hp / (float)player->hpMax;
+    if (hpRatio < 0.0f) hpRatio = 0.0f;
+    if (hpRatio > 1.0f) hpRatio = 1.0f;
+    
+    int hpFillW = (int)(barW * hpRatio);
+    Color hpFill = (hpRatio > 0.5f) ? GREEN : (hpRatio > 0.25f ? ORANGE : RED);
+    DrawRectangle(x + 1, barY + 1, hpFillW - 2 > 0 ? hpFillW - 2 : 0, barH - 2, hpFill);
+    
+    // --- ESTAMINA ---
+    int staminaY = barY + barH + 20;
+    DrawText(TextFormat("STAMINA: %.0f/%.0f", player->stamina, player->staminaMax), x, staminaY, 20, LIGHTGRAY);
+    
+    const int staminaBarY = staminaY + 24;
+    
+    // Barra de estamina - fundo
+    DrawRectangle(x, staminaBarY, barW, barH, (Color){ 40, 40, 40, 220 });
+    DrawRectangleLines(x, staminaBarY, barW, barH, (Color){ 110, 110, 110, 255 });
+    
+    // Barra de estamina - preenchimento
+    float staminaRatio = player->stamina / player->staminaMax;
+    if (staminaRatio < 0.0f) staminaRatio = 0.0f;
+    if (staminaRatio > 1.0f) staminaRatio = 1.0f;
+    
+    int staminaFillW = (int)(barW * staminaRatio);
+    DrawRectangle(x + 1, staminaBarY + 1, staminaFillW - 2 > 0 ? staminaFillW - 2 : 0, barH - 2, YELLOW);
 }
