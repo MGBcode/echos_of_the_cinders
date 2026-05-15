@@ -35,6 +35,8 @@ typedef struct {
     float staminaRecoveryDelay;
     float staminaRecoveryDelayCounter;
     float staminaRecoveryRate;
+    // Estado de vida
+    bool alive;
 } Player;
 
 void InitPlayer(Player *player, int screenWidth, int screenHeight);

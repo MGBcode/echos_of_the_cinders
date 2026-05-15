@@ -44,6 +44,7 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->staminaRecoveryDelay = 2.0f;
     player->staminaRecoveryDelayCounter = 0.0f;
     player->staminaRecoveryRate = 20.0f; // 20 pontos por segundo
+    player->alive = true;
 }
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
@@ -55,7 +56,10 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     
     // Atualizar estamina
     UpdatePlayerStamina(player, deltaTime);
-    
+
+    // Se estiver morto, não processa entradas nem movimentos
+    if (!player->alive) return;
+
     float r = player->raio * 1.2f;
 
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
@@ -84,7 +88,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->diagonalBufferTimer = 0;
     }
 
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (player->comboStep == 0 || !player->hasHitEnemy)) {
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (player->comboStep == 0 || !player->hasHitEnemy) && player->stamina >= 25.0f) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         player->isHitboxActive = false;
@@ -94,7 +98,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         PlayerUseStamina(player, 25.0f); // Consome 25 pontos de estamina
     }
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing) {
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing && player->stamina >= 15.0f) {
         player->comboStep = 1;
         player->cooldownattackTimer = 0.0f;
         player->cooldowncomboWindowTimer = 0.0f;
@@ -166,6 +170,8 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
 }
 
 void DrawPlayer(Player player) {
+    if (!player.alive) return;
+
     Color playerOuterColor = MAROON;
     if (player.isDashing) playerOuterColor = WHITE;
     else if (player.cooldownTimeCounter > 0.0f) playerOuterColor = DARKGRAY;
@@ -181,6 +187,12 @@ void DrawPlayer(Player player) {
 void PlayerTakeDamage(Player *player, int damage) {
     player->hp -= damage;
     if (player->hp < 0) player->hp = 0;
+    if (player->hp == 0) {
+        player->alive = false;
+        // cancelar ações
+        player->isDashing = false;
+        player->isHitboxActive = false;
+    }
 }
 
 void PlayerUseStamina(Player *player, float amount) {
