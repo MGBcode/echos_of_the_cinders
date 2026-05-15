@@ -2,20 +2,28 @@
 #include "player.h"
 #include "level.h"
 #include "enemy.h"
+#include <stdio.h>
 
-// HUD do boss abaixo do FPS (canto superior esquerdo)
-static void DrawBossHUD(const Boss *boss, int x, int y) {
-    // Texto
-    DrawText(TextFormat("BOSS HP: %d/%d", boss->hp, boss->hpMax), x, y, 20, LIGHTGRAY);
+// HUD do boss (barra larga no centro inferior)
+static void DrawBossHUD(const Boss *boss) {
+    int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
 
-    // Barra
-    const int barW = 220;
-    const int barH = 14;
-    const int barY = y + 24;
+    // Barra larga ocupando ~60% da largura da tela
+    int barW = (int)(screenW * 0.6f);
+    int barH = 20;
+    int barX = (screenW - barW) / 2;
+    int barY = screenH - 60;
+
+    // Texto centralizado acima da barra
+    char txt[64];
+    snprintf(txt, sizeof(txt), "BOSS HP: %d/%d", boss->hp, boss->hpMax);
+    int textW = MeasureText(txt, 20);
+    DrawText(txt, (screenW - textW) / 2, barY - 26, 20, LIGHTGRAY);
 
     // fundo
-    DrawRectangle(x, barY, barW, barH, (Color){ 40, 40, 40, 220 });
-    DrawRectangleLines(x, barY, barW, barH, (Color){ 110, 110, 110, 255 });
+    DrawRectangle(barX, barY, barW, barH, (Color){ 40, 40, 40, 220 });
+    DrawRectangleLines(barX, barY, barW, barH, (Color){ 110, 110, 110, 255 });
 
     float ratio = 0.0f;
     if (boss->hpMax > 0) ratio = (float)boss->hp / (float)boss->hpMax;
@@ -23,9 +31,8 @@ static void DrawBossHUD(const Boss *boss, int x, int y) {
     if (ratio > 1.0f) ratio = 1.0f;
 
     int fillW = (int)(barW * ratio);
-
     Color fill = (ratio > 0.5f) ? GREEN : (ratio > 0.25f ? ORANGE : RED);
-    DrawRectangle(x + 1, barY + 1, fillW - 2 > 0 ? fillW - 2 : 0, barH - 2, fill);
+    DrawRectangle(barX + 1, barY + 1, fillW - 2 > 0 ? fillW - 2 : 0, barH - 2, fill);
 }
 
 int main(void) {
@@ -114,18 +121,17 @@ int main(void) {
             DrawPlayer(cavaleiro);
             Boss_Draw(&boss);
 
-            // FPS
-            DrawFPS(10, 10);
-            DrawText("Alt+Enter para Fullscreen", 10, 40, 20, GRAY);
+            // HUD do player (canto superior esquerdo)
+            DrawPlayerHUD(&cavaleiro, 10, 10);
 
-            // HUD do boss logo abaixo do FPS
-            // (abaixo da linha do FPS e sem conflitar com o texto do fullscreen)
-            DrawBossHUD(&boss, 10, 70);
-            
-            // HUD do player (canto superior direito)
-            int playerHudX = GetScreenWidth() - 240;
-            int playerHudY = 10;
-            DrawPlayerHUD(&cavaleiro, playerHudX, playerHudY);
+            // FPS (canto superior direito)
+            DrawFPS(GetScreenWidth() - 80, 10);
+
+            // Texto de ajuda - abaixo do HUD do player
+            DrawText("Alt+Enter para Fullscreen", 10, 110, 20, GRAY);
+
+            // HUD do boss (centro inferior)
+            DrawBossHUD(&boss);
         EndDrawing();
     }
 
