@@ -95,6 +95,21 @@ MÓDULO DE MAPA (level.h e level.c)
 ARQUIVOS: enemy.h / enemy.c
 OBJETIVO: Implementação do sistema de Inteligência Artificial e Combate do Boss.
 ============================================================
+ALTERAÇÕES RECENTES (RESUMO TÉCNICO)
+------------------------------------------------------------
+player.h = define os campos do jogador, incluindo HP, estamina, morte e estados de ataque.
+player.c = implementa a máquina de estados de ataque do jogador, HUD do player e gestão de estamina.
+main.c = reposiciona HUDs e aplica dano do boss ao player usando a hitbox ativa.
+explicacoes.txt = documenta as mudanças recentes no projeto seguindo o estilo de funções/variáveis.
+
+1. ESTRUTURAS PRINCIPAIS
+     - `player.h` : novos campos (`hp`, `stamina`, `alive`, `attackState` etc.)
+     - `player.c` : implementação da máquina de estados de ataque, consumo/recovery
+                                    de estamina, HUD drawing.
+     - `main.c`   : reposicionamento dos HUDs, aplicação de dano do boss ao player
+                                    via `Boss_GetAttackCircle()`.
+
+
 
 1. ESTRUTURAS PRINCIPAIS
 ------------------------------------------------------------

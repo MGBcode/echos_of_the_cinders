@@ -26,10 +26,12 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->dashDirection = (Vector2){ 0, 0 };
     player->lastMovingDir = (Vector2){ 1.0f, 0.0f };
     player->comboStep = 0;
-    player->attackTimer = 0.3f;
+    player->attackWindup[0] = 0.70f; player->attackActive[0] = 0.10f; player->attackRecovery[0] = 0.6f;
+    player->attackWindup[1] = 0.50f; player->attackActive[1] = 0.10f; player->attackRecovery[1] = 0.6f;
+    player->attackWindup[2] = 0.12f; player->attackActive[2] = 0.40f; player->attackRecovery[2] = 0.2f;
+    player->attackState = 0;
+    player->attackStateTimer = 0.0f;
     player->comboWindowTimer = 0.5f;
-    player->cooldownattackTimer = 0.0f;
-    player->cooldowncomboWindowTimer = 0.0f;
     player->isHitboxActive = false;
     player->hitboxRadius = 0.0f;
     player->hitboxCenter = (Vector2){ 0, 0 };
@@ -88,28 +90,53 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->diagonalBufferTimer = 0;
     }
 
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (player->comboStep == 0 || !player->hasHitEnemy) && player->stamina >= 25.0f) {
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->stamina >= 15.0f) {
+        player->attackState = 0;
+        player->attackStateTimer = 0.0f;
+        player->comboStep = 0;
+        player->isHitboxActive = false;
+        player->hasHitEnemy = false;
+
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
-        player->isHitboxActive = false;
-        player->cooldownattackTimer = 0.0f;
-        player->cooldowncomboWindowTimer = 0.0f;
         player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
-        PlayerUseStamina(player, 25.0f); // Consome 25 pontos de estamina
+        PlayerUseStamina(player, 15.0f); // Consome 15 pontos de estamina
+    }
+    // --- Attack state machine: 0=none,1=windup,2=active,3=recovery ---
+    const float ATTACK_COST = 22.5f;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (player->attackState == 3) {
+            // try to chain combo during recovery
+            if (player->comboStep < 3 && player->stamina >= ATTACK_COST && !player->isDashing) {
+                player->comboStep += 1;
+                player->attackState = 1; // windup
+                player->attackStateTimer = 0.0f;
+                player->hasHitEnemy = false;
+                PlayerUseStamina(player, ATTACK_COST);
+            }
+        } else if (player->attackState == 0) {
+            // start new combo
+            if (!player->isDashing && player->stamina >= ATTACK_COST) {
+                player->comboStep = 1;
+                player->attackState = 1; // windup
+                player->attackStateTimer = 0.0f;
+                player->hasHitEnemy = false;
+                PlayerUseStamina(player, ATTACK_COST);
+            }
+        }
+
     }
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep == 0 && !player->isDashing && player->stamina >= 15.0f) {
-        player->comboStep = 1;
-        player->cooldownattackTimer = 0.0f;
-        player->cooldowncomboWindowTimer = 0.0f;
-        player->hasHitEnemy = false;
-        PlayerUseStamina(player, 15.0f); // Consome 15 pontos de estamina por ataque
-    }
-
-    if (player->comboStep > 0) {
-        if (player->cooldownattackTimer < player->attackTimer) {
-            player->cooldownattackTimer += deltaTime;
+    if (player->attackState == 1) {
+        // windup
+        player->attackStateTimer += deltaTime;
+        float windup = player->attackWindup[player->comboStep - 1];
+        if (player->attackStateTimer >= windup) {
+            player->attackState = 2; // active
+            player->attackStateTimer = 0.0f;
             player->isHitboxActive = true;
+            player->hasHitEnemy = false;
+            // setup hitbox
             float distFront = 0.0f;
             if (player->comboStep == 1 || player->comboStep == 2) {
                 player->hitboxRadius = tw * 0.7f;
@@ -120,19 +147,38 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             }
             player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
             player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
-        } else {
+        }
+    } else if (player->attackState == 2) {
+        // active
+        player->attackStateTimer += deltaTime;
+        float active = player->attackActive[player->comboStep - 1];
+        // keep hitbox positioned
+        float distFront = 0.0f;
+        if (player->comboStep == 1 || player->comboStep == 2) {
+            distFront = tw * 0.4f;
+        } else if (player->comboStep == 3) {
+            distFront = tw * 0.8f;
+        }
+        player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
+        player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
+
+        // For third hit (lunge) we keep active for the full active duration while applying impulse
+        if (player->attackStateTimer >= active) {
+            player->attackState = 3; // recovery
+            player->attackStateTimer = 0.0f;
             player->isHitboxActive = false;
-            player->cooldowncomboWindowTimer += deltaTime;
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && player->comboStep < 3) {
-                player->comboStep += 1;
-                player->cooldownattackTimer = 0.0f;
-                player->cooldowncomboWindowTimer = 0.0f;
-                player->hasHitEnemy = false;
-            } else if (player->cooldowncomboWindowTimer >= player->comboWindowTimer) {
-                player->comboStep = 0;
-                player->cooldownattackTimer = 0.0f;
-                player->cooldowncomboWindowTimer = 0.0f;
-            }
+        }
+    } else if (player->attackState == 3) {
+        // recovery (combo window)
+        player->attackStateTimer += deltaTime;
+        float recovery = player->attackRecovery[player->comboStep - 1];
+        if (player->attackStateTimer >= recovery) {
+            // end combo
+            player->attackState = 0;
+            player->attackStateTimer = 0.0f;
+            player->comboStep = 0;
+            player->isHitboxActive = false;
+            player->hasHitEnemy = false;
         }
     } else {
         player->isHitboxActive = false;
@@ -150,10 +196,16 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->isDashing = false;
             player->cooldownTimeCounter = player->dashCooldown;
         }
-    } else if (player->comboStep == 3) {
+    } else if (player->attackState == 2 && player->comboStep == 3) {
+        // third-hit lunge during active
         velX = player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
         velY = player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
-    } else if (player->comboStep == 0) {
+    } else if (player->attackState == 1 || player->attackState == 2) {
+        // locked during windup/active (except third active lunge handled above)
+        velX = 0;
+        velY = 0;
+    } else {
+        // normal movement (includes recovery and none)
         velX = inputDir.x * player->normalSpeed * deltaTime;
         velY = inputDir.y * player->normalSpeed * deltaTime;
     }

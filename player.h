@@ -19,9 +19,12 @@ typedef struct {
     Vector2 lastMovingDir;
     float diagonalBufferTimer;
     int comboStep;
-    float attackTimer;
-    float cooldownattackTimer;
-    float cooldowncomboWindowTimer;
+    // Attack state machine (windup -> active -> recovery)
+    int attackState; // 0 = none, 1 = windup, 2 = active, 3 = recovery
+    float attackStateTimer;
+    float attackWindup[3];
+    float attackActive[3];
+    float attackRecovery[3];
     float comboWindowTimer;
     Vector2 hitboxCenter;
     float hitboxRadius;
