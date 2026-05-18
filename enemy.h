@@ -6,13 +6,19 @@
 #include "level.h"
 
 typedef enum {
-    BOSS_WANDER = 0,
-    BOSS_ALERT,
-    BOSS_ATTACK_BRUTAL,
-    BOSS_COMBAT,
-    BOSS_ATTACK_LIGHT,
+    BOSS_OBSERVE = 0,
+    BOSS_HUNT,
+    BOSS_ATTACK,
     BOSS_COOLDOWN
 } BossState;
+
+typedef enum {
+    BOSS_ATTACK_TYPE_LIGHT = 0,
+    BOSS_ATTACK_TYPE_HEAVY,
+    BOSS_ATTACK_TYPE_BRUTAL,
+    BOSS_ATTACK_TYPE_PROJECTILE,
+    BOSS_ATTACK_TYPE_AOE_BURST
+} BossAttackType;
 
 typedef struct {
     Vector2 center;
@@ -29,16 +35,22 @@ typedef struct {
     int hpMax;
 
     BossState state;
+    BossAttackType attackType;
     float stateTimer;
 
+    float sizeScale;
     float aggroRadius;
+    float observeSpeed;
+    float huntSpeed;
+    float observeDistance;
+    float attackRange;
+    float pursuitDistance;
     bool openingBrutalPending;
+    bool aoe50Triggered;
+    bool aoe15Triggered;
 
-    Vector2 wanderDir;
-    float wanderSpeed;
-    float wanderChangeTimer;
-
-    float combatSpeed;
+    // Phase helper
+    int phase; // 1 ou 2
 
     // Light attack
     float lightWindup;
@@ -47,6 +59,8 @@ typedef struct {
     float lightHitRadius;
     float lightForwardOffset;
     int   lightDamage;
+    int   lightMaxHits;
+    int   lightHitIndex;
 
     // Brutal attack
     float brutalWindup;
@@ -56,11 +70,36 @@ typedef struct {
     float brutalLungeSpeed;
     int   brutalDamage;
 
+    // Heavy attack
+    float heavyWindup;
+    float heavyActive;
+    float heavyRecovery;
+    float heavyHitRadius;
+    float heavyForwardOffset;
+    int   heavyDamage;
+    int   heavyMaxHits;
+    int   heavyHitIndex;
+
     Vector2 attackDir;
     Vector2 lockedTargetPos;
 
     AttackCircle atk;
     bool hasHitPlayerThisAttack;
+
+    // AoE burst
+    float aoeWindup;
+    float aoeActive;
+    float aoeRecovery;
+    float aoeRadius;
+    int   aoeDamage;
+
+    // Projetil
+    bool  projActive;
+    Vector2 projPos;
+    Vector2 projDir;
+    float projSpeed;
+    float projRadius;
+    int   projDamage;
 } Boss;
 
 void Boss_Init(Boss *b, Vector2 startPos);

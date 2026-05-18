@@ -52,192 +52,350 @@ bool Boss_GetAttackCircle(const Boss *b, AttackCircle *out) {
 // -------------------- boss logic --------------------
 void Boss_Init(Boss *b, Vector2 startPos) {
     b->pos = startPos;
-    b->raio = 28.0f;
+    b->sizeScale = 2.5f;
+    b->raio = 28.0f * b->sizeScale;
 
-    b->hpMax = 200;
+    b->hpMax = 100;
     b->hp = b->hpMax;
 
-    b->state = BOSS_WANDER;
-    b->stateTimer = 0.0f;
+    b->state = BOSS_OBSERVE;
+    b->attackType = BOSS_ATTACK_TYPE_LIGHT;
+    b->stateTimer = 1.2f;
 
-    b->aggroRadius = 220.0f;
+    b->sizeScale = 2.5f;
+    b->aggroRadius = 260.0f;
+    b->observeSpeed = 40.0f;
+    b->huntSpeed = 170.0f;
+    b->observeDistance = 260.0f;
+    b->attackRange = 180.0f;
+    b->pursuitDistance = 360.0f;
     b->openingBrutalPending = false;
-
-    b->wanderDir = (Vector2){1, 0};
-    b->wanderSpeed = 70.0f;
-    b->wanderChangeTimer = RandRange(0.8f, 1.8f);
-
-    b->combatSpeed = 90.0f;
+    b->aoe50Triggered = false;
+    b->aoe15Triggered = false;
+    b->phase = 1;
 
     // Light attack
-    b->lightWindup = 0.20f;
-    b->lightActive = 0.12f;
-    b->lightRecovery = 0.35f;
-    b->lightHitRadius = 45.0f;
-    b->lightForwardOffset = 35.0f;
-    b->lightDamage = 10;
+    b->lightWindup = 0.60f;
+    b->lightActive = 0.16f;
+    b->lightRecovery = 0.24f;
+    b->lightHitRadius = 42.0f * b->sizeScale;
+    b->lightForwardOffset = 32.0f * b->sizeScale;
+    b->lightDamage = 12;
+    b->lightMaxHits = 3;
 
-    // Brutal attack (abertura)
-    b->brutalWindup = 0.70f;
-    b->brutalActive = 0.15f;
-    b->brutalRecovery = 0.90f;
-    b->brutalHitRadius = 70.0f;
-    b->brutalLungeSpeed = 420.0f;
-    b->brutalDamage = 75;
+    // Brutal attack
+    b->brutalWindup = 0.95f;
+    b->brutalActive = 0.28f;
+    b->brutalRecovery = 1.10f;
+    b->brutalHitRadius = 68.0f * b->sizeScale;
+    b->brutalLungeSpeed = 450.0f;
+    b->brutalDamage = 28;
+
+    // Heavy attack
+    b->heavyWindup = 1.20f;
+    b->heavyActive = 0.33f;
+    b->heavyRecovery = 1.20f;
+    b->heavyHitRadius = 90.0f * b->sizeScale;
+    b->heavyForwardOffset = 52.0f * b->sizeScale;
+    b->heavyDamage = 28;
+    b->heavyMaxHits = 2;
 
     b->atk = (AttackCircle){0};
     b->attackDir = (Vector2){1, 0};
     b->lockedTargetPos = startPos;
     b->hasHitPlayerThisAttack = false;
+
+    // AoE burst
+    b->aoeWindup = 1.80f;
+    b->aoeActive = 0.55f;
+    b->aoeRecovery = 1.30f;
+    b->aoeRadius = 180.0f * b->sizeScale;
+    b->aoeDamage = 85;
+
+    // Projectile
+    b->projActive = false;
+    b->projPos = startPos;
+    b->projDir = (Vector2){0,0};
+    b->projSpeed = 640.0f;
+    b->projRadius = 14.0f * b->sizeScale;
+    b->projDamage = 30;
 }
 
-static void EnterAlert(Boss *b) {
-    b->state = BOSS_ALERT;
-    b->stateTimer = 0.90f;
+static void EnterObserve(Boss *b) {
+    b->state = BOSS_OBSERVE;
+    b->stateTimer = RandRange(1.0f, 1.6f);
     b->atk.active = false;
-    b->openingBrutalPending = true; // sempre que sai do WANDER
 }
 
-static void StartAttack(Boss *b, BossState attackState, Vector2 playerPos) {
-    b->state = attackState;
+static void EnterHunt(Boss *b) {
+    b->state = BOSS_HUNT;
+    b->stateTimer = 0.0f;
+    b->atk.active = false;
+}
+
+static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
+    b->state = BOSS_ATTACK;
+    b->attackType = attackType;
     b->stateTimer = 0.0f;
     b->lockedTargetPos = playerPos;
     b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
     b->atk.active = false;
     b->hasHitPlayerThisAttack = false;
+    b->projActive = false;
 }
 
 void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level *level) {
     if (b->hp <= 0) return;
 
-    // Ajusta tamanho/velocidade conforme tile
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
     float tileAvg = (tw + th) * 0.5f;
 
     float bossR = tileAvg * 0.35f;
     if (bossR < 18.0f) bossR = 18.0f;
+    bossR *= b->sizeScale;
     b->raio = bossR;
 
     float dist = Vector2Distance(b->pos, playerPos);
+    float hpRatio = (float)b->hp / (float)b->hpMax;
+    b->phase = (hpRatio > 0.5f) ? 1 : 2;
+
+    if (!b->aoe50Triggered && hpRatio <= 0.5f) {
+        b->aoe50Triggered = true;
+        StartAttack(b, BOSS_ATTACK_TYPE_AOE_BURST, playerPos);
+        return;
+    }
+    if (!b->aoe15Triggered && hpRatio <= 0.15f) {
+        b->aoe15Triggered = true;
+        StartAttack(b, BOSS_ATTACK_TYPE_AOE_BURST, playerPos);
+        return;
+    }
 
     switch (b->state) {
-        case BOSS_WANDER: {
-            b->wanderChangeTimer -= dt;
-            if (b->wanderChangeTimer <= 0.0f) {
-                Vector2 r = (Vector2){ RandRange(-1, 1), RandRange(-1, 1) };
-                b->wanderDir = SafeNormalize(r);
-                b->wanderChangeTimer = RandRange(0.8f, 1.8f);
-            }
-
-            Vector2 delta = Vector2Scale(b->wanderDir, b->wanderSpeed * dt);
-            MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
-
-            if (dist <= b->aggroRadius) {
-                EnterAlert(b);
-            }
-        } break;
-
-        case BOSS_ALERT: {
+        case BOSS_OBSERVE: {
             b->stateTimer -= dt;
-            if (b->stateTimer <= 0.0f) {
-                if (b->openingBrutalPending) {
-                    b->openingBrutalPending = false;
-                    StartAttack(b, BOSS_ATTACK_BRUTAL, playerPos);
-                } else {
-                    b->state = BOSS_COMBAT;
-                }
-            }
-        } break;
+            Vector2 toPlayer = Vector2Subtract(playerPos, b->pos);
+            Vector2 dirToPlayer = SafeNormalize(toPlayer);
+            Vector2 lateral = (Vector2){-dirToPlayer.y, dirToPlayer.x};
+            Vector2 move = {0};
 
-        case BOSS_ATTACK_BRUTAL: {
-            b->stateTimer += dt;
-
-            float windupEnd = b->brutalWindup;
-            float activeEnd = b->brutalWindup + b->brutalActive;
-            float totalEnd  = b->brutalWindup + b->brutalActive + b->brutalRecovery;
-
-            if (b->stateTimer <= activeEnd) {
-                Vector2 delta = Vector2Scale(b->attackDir, b->brutalLungeSpeed * dt);
-                MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
-            }
-
-            if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
-                b->atk.active = true;
-                b->atk.damage = b->brutalDamage;
-                b->atk.radius = b->brutalHitRadius;
-                b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->atk.radius * 0.6f));
+            float idealDistance = b->observeDistance;
+            float distanceDelta = dist - idealDistance;
+            if (fabsf(distanceDelta) > 30.0f) {
+                float speed = b->observeSpeed * ((distanceDelta > 0.0f) ? 1.25f : 0.85f);
+                move = Vector2Scale(dirToPlayer, speed * (distanceDelta > 0.0f ? 1.0f : -1.0f) * dt);
             } else {
-                b->atk.active = false;
+                move = Vector2Scale(lateral, b->observeSpeed * 0.55f * dt);
             }
+            MoveWithCollision(level, &b->pos, b->raio * 1.1f, move);
 
-            if (b->atk.active && !b->hasHitPlayerThisAttack) {
-                if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
-                    b->hasHitPlayerThisAttack = true;
-
-                    // Antes: -%d
-                    printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
+            if (dist > b->pursuitDistance) {
+                EnterHunt(b);
+            } else if (b->stateTimer <= 0.0f) {
+                if (dist <= b->attackRange * 1.1f) {
+                    if (dist <= b->attackRange * 0.75f) {
+                        int choice = rand() % 2;
+                        StartAttack(b, choice == 0 ? BOSS_ATTACK_TYPE_LIGHT : BOSS_ATTACK_TYPE_HEAVY, playerPos);
+                    } else {
+                        if (b->phase == 2 && rand() % 2 == 0) StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
+                        else StartAttack(b, BOSS_ATTACK_TYPE_BRUTAL, playerPos);
+                    }
+                } else {
+                    EnterHunt(b);
                 }
-            }
-
-            if (b->stateTimer >= totalEnd) {
-                b->atk.active = false;
-                b->state = BOSS_COOLDOWN;
-                b->stateTimer = 0.35f;
             }
         } break;
 
-        case BOSS_COMBAT: {
+        case BOSS_HUNT: {
             Vector2 dirToPlayer = SafeNormalize(Vector2Subtract(playerPos, b->pos));
-            Vector2 delta = Vector2Scale(dirToPlayer, b->combatSpeed * dt);
+            Vector2 delta = Vector2Scale(dirToPlayer, b->huntSpeed * dt);
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
 
-            if (dist < (tileAvg * 2.2f)) {
-                StartAttack(b, BOSS_ATTACK_LIGHT, playerPos);
-            }
-
-            if (dist > b->aggroRadius * 1.25f) {
-                b->state = BOSS_WANDER;
-                b->openingBrutalPending = false;
+            if (dist <= b->attackRange) {
+                if (dist <= b->attackRange * 0.8f) {
+                    int choice = rand() % 2;
+                    StartAttack(b, choice == 0 ? BOSS_ATTACK_TYPE_LIGHT : BOSS_ATTACK_TYPE_HEAVY, playerPos);
+                } else {
+                    if (b->phase == 2 && rand() % 2 == 0) StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
+                    else StartAttack(b, BOSS_ATTACK_TYPE_BRUTAL, playerPos);
+                }
+            } else if (dist <= b->observeDistance * 1.05f) {
+                EnterObserve(b);
             }
         } break;
 
-        case BOSS_ATTACK_LIGHT: {
+        case BOSS_ATTACK: {
             b->stateTimer += dt;
+            float windupEnd = 0.0f;
+            float activeEnd = 0.0f;
+            float totalEnd = 0.0f;
+            float cooldown = 1.0f;
 
-            float windupEnd = b->lightWindup;
-            float activeEnd = b->lightWindup + b->lightActive;
-            float totalEnd  = b->lightWindup + b->lightActive + b->lightRecovery;
+            switch (b->attackType) {
+                case BOSS_ATTACK_TYPE_LIGHT: {
+                    float baseWindup = b->lightWindup;
+                    float perHit = b->lightWindup + b->lightActive + b->lightRecovery;
+                    int currentHit = (int)(b->stateTimer / perHit);
+                    if (currentHit >= b->lightMaxHits) currentHit = b->lightMaxHits - 1;
+                    float localT = fmodf(b->stateTimer, perHit);
+                    windupEnd = (currentHit == 0) ? baseWindup : 0.30f;
+                    activeEnd = windupEnd + b->lightActive;
+                    totalEnd = perHit * b->lightMaxHits;
+                    cooldown = 0.95f;
 
-            if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
-                b->atk.active = true;
-                b->atk.damage = b->lightDamage;
-                b->atk.radius = b->lightHitRadius;
-                b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
-            } else {
-                b->atk.active = false;
+                    if (currentHit < b->lightMaxHits && localT >= windupEnd && localT < activeEnd) {
+                        if (!b->hasHitPlayerThisAttack) {
+                            b->atk.active = true;
+                            b->atk.damage = b->lightDamage;
+                            b->atk.radius = b->lightHitRadius;
+                            b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
+                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                                b->hasHitPlayerThisAttack = true;
+                                printf("[HIT] Leve acertou o player: %d HP\n", b->lightDamage);
+                            }
+                        }
+                    } else {
+                        if (localT >= activeEnd) b->hasHitPlayerThisAttack = false;
+                        b->atk.active = false;
+                    }
+                } break;
+
+                case BOSS_ATTACK_TYPE_HEAVY: {
+                    float perHit = b->heavyWindup + b->heavyActive + b->heavyRecovery;
+                    int currentHit = (int)(b->stateTimer / perHit);
+                    if (currentHit >= b->heavyMaxHits) currentHit = b->heavyMaxHits - 1;
+                    float localT = fmodf(b->stateTimer, perHit);
+                    windupEnd = (currentHit == 0) ? b->heavyWindup : b->heavyWindup * 0.7f;
+                    activeEnd = windupEnd + b->heavyActive;
+                    totalEnd = perHit * b->heavyMaxHits;
+                    cooldown = 1.35f;
+
+                    if (currentHit < b->heavyMaxHits && localT >= windupEnd && localT < activeEnd) {
+                        if (!b->hasHitPlayerThisAttack) {
+                            b->atk.active = true;
+                            b->atk.damage = b->heavyDamage;
+                            b->atk.radius = b->heavyHitRadius;
+                            b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
+                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                                b->hasHitPlayerThisAttack = true;
+                                printf("[HIT] Heavy acertou o player: %d HP\n", b->heavyDamage);
+                            }
+                        }
+                    } else {
+                        if (localT >= activeEnd) b->hasHitPlayerThisAttack = false;
+                        b->atk.active = false;
+                    }
+                } break;
+
+                case BOSS_ATTACK_TYPE_BRUTAL: {
+                    windupEnd = b->brutalWindup;
+                    activeEnd = b->brutalWindup + b->brutalActive;
+                    totalEnd = b->brutalWindup + b->brutalActive + b->brutalRecovery;
+                    cooldown = 1.15f;
+
+                    if (b->stateTimer <= activeEnd) {
+                        Vector2 delta = Vector2Scale(b->attackDir, b->brutalLungeSpeed * dt);
+                        MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
+                    }
+                    if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
+                        b->atk.active = true;
+                        b->atk.damage = b->brutalDamage;
+                        b->atk.radius = b->brutalHitRadius;
+                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->atk.radius * 0.6f));
+                    } else {
+                        b->atk.active = false;
+                    }
+                    if (b->atk.active && !b->hasHitPlayerThisAttack) {
+                        if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                            b->hasHitPlayerThisAttack = true;
+                            printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
+                        }
+                    }
+                } break;
+
+                case BOSS_ATTACK_TYPE_PROJECTILE: {
+                    windupEnd = 0.80f;
+                    activeEnd = windupEnd + 0.12f;
+                    totalEnd = windupEnd + 1.10f;
+                    cooldown = 1.05f;
+
+                    if (b->stateTimer < windupEnd) {
+                        b->atk.active = false;
+                    } else if (b->stateTimer >= windupEnd && !b->projActive) {
+                        b->projActive = true;
+                        b->projPos = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->projRadius + 4.0f));
+                        b->projDir = b->attackDir;
+                        b->atk.active = true;
+                        b->atk.center = b->projPos;
+                        b->atk.radius = b->projRadius;
+                        b->atk.damage = b->projDamage;
+                    }
+                    if (b->projActive) {
+                        Vector2 move = Vector2Scale(b->projDir, b->projSpeed * dt);
+                        float newx = b->projPos.x + move.x;
+                        float newy = b->projPos.y + move.y;
+                        if (CanMoveCircle(level, newx, newy, b->projRadius)) {
+                            b->projPos.x = newx;
+                            b->projPos.y = newy;
+                            b->atk.center = b->projPos;
+                        } else {
+                            b->projActive = false;
+                            b->atk.active = false;
+                        }
+                        if (b->atk.active && !b->hasHitPlayerThisAttack) {
+                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                                b->hasHitPlayerThisAttack = true;
+                                printf("[HIT] Projectile acertou o player: %d HP\n", b->projDamage);
+                            }
+                        }
+                    }
+                } break;
+
+                case BOSS_ATTACK_TYPE_AOE_BURST: {
+                    windupEnd = b->aoeWindup;
+                    activeEnd = b->aoeWindup + b->aoeActive;
+                    totalEnd = b->aoeWindup + b->aoeActive + b->aoeRecovery;
+                    cooldown = 1.4f;
+
+                    if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
+                        b->atk.active = true;
+                        b->atk.center = b->pos;
+                        b->atk.radius = b->aoeRadius;
+                        b->atk.damage = b->aoeDamage;
+                    } else {
+                        b->atk.active = false;
+                    }
+                    if (b->atk.active && !b->hasHitPlayerThisAttack) {
+                        if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                            b->hasHitPlayerThisAttack = true;
+                            printf("[HIT] AoE Burst acertou o player: %d HP\n", b->aoeDamage);
+                        }
+                    }
+                } break;
+
+                default: break;
             }
 
-            if (b->atk.active && !b->hasHitPlayerThisAttack) {
-                if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
-                    b->hasHitPlayerThisAttack = true;
-
-                    // Antes: -%d
-                    printf("[HIT] Leve acertou o player: %d HP\n", b->lightDamage);
+            if (b->attackType != BOSS_ATTACK_TYPE_BRUTAL) {
+                if (b->stateTimer >= totalEnd) {
+                    b->atk.active = false;
+                    b->projActive = false;
+                    b->state = BOSS_COOLDOWN;
+                    b->stateTimer = cooldown;
                 }
-            }
-
-            if (b->stateTimer >= totalEnd) {
-                b->atk.active = false;
-                b->state = BOSS_COOLDOWN;
-                b->stateTimer = 0.30f;
+            } else {
+                if (b->stateTimer >= totalEnd) {
+                    b->atk.active = false;
+                    b->state = BOSS_COOLDOWN;
+                    b->stateTimer = cooldown;
+                }
             }
         } break;
 
         case BOSS_COOLDOWN: {
             b->stateTimer -= dt;
             if (b->stateTimer <= 0.0f) {
-                b->state = BOSS_COMBAT;
+                EnterObserve(b);
             }
         } break;
 
@@ -252,16 +410,49 @@ void Boss_Draw(const Boss *b) {
     }
 
     Color col = (Color){ 160, 70, 40, 255 };
-    if (b->state == BOSS_ALERT) {
-        int blink = ((int)(GetTime() * 10.0) % 2);
-        col = blink ? RED : MAROON;
-    } else if (b->state == BOSS_ATTACK_BRUTAL) col = ORANGE;
-    else if (b->state == BOSS_ATTACK_LIGHT) col = GOLD;
+    if (b->state == BOSS_OBSERVE) {
+        col = (Color){120, 80, 60, 255};
+    } else if (b->state == BOSS_HUNT) {
+        col = (Color){180, 90, 40, 255};
+    } else if (b->state == BOSS_ATTACK) {
+        bool inWindup = false;
+        switch (b->attackType) {
+            case BOSS_ATTACK_TYPE_LIGHT:
+                inWindup = (b->stateTimer < b->lightWindup);
+                col = inWindup ? YELLOW : GOLD;
+                break;
+            case BOSS_ATTACK_TYPE_HEAVY:
+                inWindup = (b->stateTimer < b->heavyWindup);
+                col = inWindup ? ORANGE : (Color){200, 120, 60, 255};
+                break;
+            case BOSS_ATTACK_TYPE_BRUTAL:
+                inWindup = (b->stateTimer < b->brutalWindup);
+                col = inWindup ? ORANGE : RED;
+                break;
+            case BOSS_ATTACK_TYPE_PROJECTILE:
+                inWindup = (b->stateTimer < 0.80f);
+                col = inWindup ? YELLOW : GOLD;
+                break;
+            case BOSS_ATTACK_TYPE_AOE_BURST:
+                inWindup = (b->stateTimer < b->aoeWindup);
+                col = inWindup ? (Color){120, 20, 20, 255} : RED;
+                break;
+            default:
+                col = RED;
+                break;
+        }
+        if (inWindup) col.a = 230;
+    } else if (b->state == BOSS_COOLDOWN) {
+        col = (Color){80, 80, 120, 255};
+    }
 
     DrawCircleV(b->pos, b->raio, col);
 
     if (b->atk.active) {
-        DrawCircleLines((int)b->atk.center.x, (int)b->atk.center.y, b->atk.radius, RAYWHITE);
+        Color hb = RED;
+        if (b->attackType == BOSS_ATTACK_TYPE_PROJECTILE) hb = YELLOW;
+        else if (b->attackType == BOSS_ATTACK_TYPE_AOE_BURST) hb = (Color){200, 40, 40, 200};
+        DrawCircleLines((int)b->atk.center.x, (int)b->atk.center.y, b->atk.radius, hb);
     }
 
     // REMOVIDO: HUD de HP do boss daqui.
