@@ -17,6 +17,8 @@ typedef struct {
     float cooldownTimeCounter;
     Vector2 dashDirection;
     Vector2 lastMovingDir;
+    int lastHorizontalInput;
+    int lastVerticalInput;
     float diagonalBufferTimer;
     int comboStep;
     // Attack state machine (windup -> active -> recovery)

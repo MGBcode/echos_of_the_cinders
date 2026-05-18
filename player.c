@@ -25,6 +25,8 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->cooldownTimeCounter = 0.0f;
     player->dashDirection = (Vector2){ 0, 0 };
     player->lastMovingDir = (Vector2){ 1.0f, 0.0f };
+    player->lastHorizontalInput = 1;
+    player->lastVerticalInput = 0;
     player->comboStep = 0;
     player->attackWindup[0] = 0.70f; player->attackActive[0] = 0.10f; player->attackRecovery[0] = 0.6f;
     player->attackWindup[1] = 0.50f; player->attackActive[1] = 0.10f; player->attackRecovery[1] = 0.6f;
@@ -68,10 +70,36 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->cooldownTimeCounter -= deltaTime;
 
     Vector2 inputDir = { 0.0f, 0.0f };
-    if (IsKeyDown(KEY_D)) inputDir.x += 1.0f;
-    if (IsKeyDown(KEY_A)) inputDir.x -= 1.0f;
-    if (IsKeyDown(KEY_S)) inputDir.y += 1.0f;
-    if (IsKeyDown(KEY_W)) inputDir.y -= 1.0f;
+    bool rightDown = IsKeyDown(KEY_D);
+    bool leftDown = IsKeyDown(KEY_A);
+    bool downDown = IsKeyDown(KEY_S);
+    bool upDown = IsKeyDown(KEY_W);
+
+    if (IsKeyPressed(KEY_D)) player->lastHorizontalInput = 1;
+    if (IsKeyPressed(KEY_A)) player->lastHorizontalInput = -1;
+    if (IsKeyPressed(KEY_S)) player->lastVerticalInput = 1;
+    if (IsKeyPressed(KEY_W)) player->lastVerticalInput = -1;
+
+    if (rightDown && leftDown) {
+        inputDir.x = (float)player->lastHorizontalInput;
+    } else if (rightDown) {
+        inputDir.x = 1.0f;
+        player->lastHorizontalInput = 1;
+    } else if (leftDown) {
+        inputDir.x = -1.0f;
+        player->lastHorizontalInput = -1;
+    }
+
+    if (downDown && upDown) {
+        inputDir.y = (float)player->lastVerticalInput;
+    } else if (downDown) {
+        inputDir.y = 1.0f;
+        player->lastVerticalInput = 1;
+    } else if (upDown) {
+        inputDir.y = -1.0f;
+        player->lastVerticalInput = -1;
+    }
+
     inputDir = Vector2Normalize(inputDir);
 
     bool isInputDiagonal = (inputDir.x != 0.0f && inputDir.y != 0.0f);
