@@ -52,13 +52,24 @@ typedef struct {
     // Phase helper
     int phase; // 1 ou 2
 
+    // State transition helpers
+    float stateHoldTimer;
+    float stateHoldMinObserve;
+    float stateHoldMinHunt;
+    float huntDashTimer;
+    float huntDashDuration;
+    float huntDashCooldown;
+    bool  huntDashActive;
+
     // Light attack
     float lightWindup;
     float lightActive;
     float lightRecovery;
     float lightHitRadius;
     float lightForwardOffset;
-    int   lightDamage;
+    int   lightDamage1;
+    int   lightDamage2;
+    int   lightDamage3;
     int   lightMaxHits;
     int   lightHitIndex;
 
@@ -76,7 +87,8 @@ typedef struct {
     float heavyRecovery;
     float heavyHitRadius;
     float heavyForwardOffset;
-    int   heavyDamage;
+    int   heavyDamage1;
+    int   heavyDamage2;
     int   heavyMaxHits;
     int   heavyHitIndex;
 

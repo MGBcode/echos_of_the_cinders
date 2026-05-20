@@ -62,8 +62,19 @@ int main(void) {
     // Anti-multi-hit: aplica dano 1x por ativação do ataque do boss
     bool lastBossAttackActive = false;
 
+    // Pausa do jogo
+    bool isPaused = false;
+    bool lastCKeyPressed = false;
+
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
+
+        // Detectar pausa com tecla C
+        bool currentCKeyPressed = IsKeyPressed(KEY_C);
+        if (currentCKeyPressed && !lastCKeyPressed) {
+            isPaused = !isPaused;
+        }
+        lastCKeyPressed = currentCKeyPressed;
 
         // SÓ atualiza os cálculos do mapa se a janela mudar de tamanho
         if (IsWindowResized() || GetScreenWidth() != lastScreenWidth) {
@@ -81,39 +92,42 @@ int main(void) {
             lastScreenHeight = GetScreenHeight();
         }
 
-        UpdatePlayer(&cavaleiro, deltaTime, &level);
-        Boss_Update(&boss, deltaTime, cavaleiro.pos, cavaleiro.raio, &level);
+        // Só atualiza o jogo se não estiver pausado
+        if (!isPaused) {
+            UpdatePlayer(&cavaleiro, deltaTime, &level);
+            Boss_Update(&boss, deltaTime, cavaleiro.pos, cavaleiro.raio, &level);
 
-        // Dano no boss por colisão com hitbox do player (sem mexer no player)
-        // Observação: aqui o dano é fixo só para validar HUD/feedback.
-        const int PLAYER_DEBUG_DAMAGE = 10;
-        const int BOSS_ATTACK_DAMAGE = 15;
+            // Dano no boss por colisão com hitbox do player (sem mexer no player)
+            // Observação: aqui o dano é fixo só para validar HUD/feedback.
+            const int PLAYER_DEBUG_DAMAGE = 10;
+            const int BOSS_ATTACK_DAMAGE = 15;
 
-        bool hitboxActiveNow = cavaleiro.isHitboxActive;
+            bool hitboxActiveNow = cavaleiro.isHitboxActive;
 
-        // Só tenta dar hit quando a hitbox "acabou de ativar"
-        if (hitboxActiveNow && !lastHitboxActive && boss.hp > 0) {
-            if (CheckCollisionCircles(cavaleiro.hitboxCenter, cavaleiro.hitboxRadius,
-                                      boss.pos, boss.raio)) {
-                boss.hp -= PLAYER_DEBUG_DAMAGE;
-                if (boss.hp < 0) boss.hp = 0;
+            // Só tenta dar hit quando a hitbox "acabou de ativar"
+            if (hitboxActiveNow && !lastHitboxActive && boss.hp > 0) {
+                if (CheckCollisionCircles(cavaleiro.hitboxCenter, cavaleiro.hitboxRadius,
+                                          boss.pos, boss.raio)) {
+                    boss.hp -= PLAYER_DEBUG_DAMAGE;
+                    if (boss.hp < 0) boss.hp = 0;
+                }
             }
-        }
 
-        lastHitboxActive = hitboxActiveNow;
+            lastHitboxActive = hitboxActiveNow;
 
-        // Dano no player por ataque do boss
-        AttackCircle bossAttack;
-        bool bossAttackActive = Boss_GetAttackCircle(&boss, &bossAttack);
-        
-        if (bossAttackActive && !lastBossAttackActive && cavaleiro.hp > 0) {
-            if (CheckCollisionCircles(bossAttack.center, bossAttack.radius,
-                                      cavaleiro.pos, cavaleiro.raio)) {
-                PlayerTakeDamage(&cavaleiro, BOSS_ATTACK_DAMAGE);
+            // Dano no player por ataque do boss
+            AttackCircle bossAttack;
+            bool bossAttackActive = Boss_GetAttackCircle(&boss, &bossAttack);
+            
+            if (bossAttackActive && !lastBossAttackActive && cavaleiro.hp > 0) {
+                if (CheckCollisionCircles(bossAttack.center, bossAttack.radius,
+                                          cavaleiro.pos, cavaleiro.raio)) {
+                    PlayerTakeDamage(&cavaleiro, BOSS_ATTACK_DAMAGE);
+                }
             }
+            
+            lastBossAttackActive = bossAttackActive;
         }
-        
-        lastBossAttackActive = bossAttackActive;
 
         BeginDrawing();
             ClearBackground(BLACK);
@@ -129,9 +143,20 @@ int main(void) {
 
             // Texto de ajuda - abaixo do HUD do player
             DrawText("Alt+Enter para Fullscreen", 10, 110, 20, GRAY);
+            DrawText("C para Pausar/Resumir", 10, 140, 20, GRAY);
 
             // HUD do boss (centro inferior)
             DrawBossHUD(&boss);
+
+            // Tela de pausa
+            if (isPaused) {
+                int screenW = GetScreenWidth();
+                int screenH = GetScreenHeight();
+                DrawRectangle(0, 0, screenW, screenH, (Color){0, 0, 0, 150});
+                const char *pauseText = "PAUSED";
+                int textW = MeasureText(pauseText, 80);
+                DrawText(pauseText, (screenW - textW) / 2, screenH / 2 - 40, 80, YELLOW);
+            }
         EndDrawing();
     }
 

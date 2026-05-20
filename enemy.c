@@ -14,6 +14,10 @@ static Vector2 SafeNormalize(Vector2 v) {
     return Vector2Scale(v, 1.0f / len);
 }
 
+static float GetPhaseWindup(const Boss *b, float baseWindup) {
+    return (b->phase == 2) ? baseWindup * 0.75f : baseWindup;
+}
+
 // Colisão em tiles (igual ao player, mas para o boss)
 static bool CanMoveCircle(Level *level, float x, float y, float r) {
     int tw = level->tamanho_tile;
@@ -55,12 +59,19 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->sizeScale = 2.5f;
     b->raio = 28.0f * b->sizeScale;
 
-    b->hpMax = 100;
+    b->hpMax = 200;
     b->hp = b->hpMax;
 
     b->state = BOSS_OBSERVE;
     b->attackType = BOSS_ATTACK_TYPE_LIGHT;
     b->stateTimer = 1.2f;
+    b->stateHoldTimer = 0.0f;
+    b->stateHoldMinObserve = 0.85f;
+    b->stateHoldMinHunt = 0.75f;
+    b->huntDashTimer = 0.0f;
+    b->huntDashDuration = 0.18f;
+    b->huntDashCooldown = 2.4f;
+    b->huntDashActive = false;
 
     b->sizeScale = 2.5f;
     b->aggroRadius = 260.0f;
@@ -80,7 +91,9 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->lightRecovery = 0.24f;
     b->lightHitRadius = 42.0f * b->sizeScale;
     b->lightForwardOffset = 32.0f * b->sizeScale;
-    b->lightDamage = 12;
+    b->lightDamage1 = 10;
+    b->lightDamage2 = 10;
+    b->lightDamage3 = 15;
     b->lightMaxHits = 3;
 
     // Brutal attack
@@ -89,7 +102,7 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->brutalRecovery = 1.10f;
     b->brutalHitRadius = 68.0f * b->sizeScale;
     b->brutalLungeSpeed = 450.0f;
-    b->brutalDamage = 28;
+    b->brutalDamage = 40;
 
     // Heavy attack
     b->heavyWindup = 1.20f;
@@ -97,7 +110,8 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->heavyRecovery = 1.20f;
     b->heavyHitRadius = 90.0f * b->sizeScale;
     b->heavyForwardOffset = 52.0f * b->sizeScale;
-    b->heavyDamage = 28;
+    b->heavyDamage1 = 30;
+    b->heavyDamage2 = 50;
     b->heavyMaxHits = 2;
 
     b->atk = (AttackCircle){0};
@@ -110,7 +124,7 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->aoeActive = 0.55f;
     b->aoeRecovery = 1.30f;
     b->aoeRadius = 180.0f * b->sizeScale;
-    b->aoeDamage = 85;
+    b->aoeDamage = 70;
 
     // Projectile
     b->projActive = false;
@@ -118,19 +132,23 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->projDir = (Vector2){0,0};
     b->projSpeed = 640.0f;
     b->projRadius = 14.0f * b->sizeScale;
-    b->projDamage = 30;
+    b->projDamage = 20;
 }
 
 static void EnterObserve(Boss *b) {
     b->state = BOSS_OBSERVE;
     b->stateTimer = RandRange(1.0f, 1.6f);
+    b->stateHoldTimer = b->stateHoldMinObserve;
     b->atk.active = false;
+    b->projActive = false;
 }
 
 static void EnterHunt(Boss *b) {
     b->state = BOSS_HUNT;
     b->stateTimer = 0.0f;
+    b->stateHoldTimer = b->stateHoldMinHunt;
     b->atk.active = false;
+    b->projActive = false;
 }
 
 static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
@@ -174,22 +192,24 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
     switch (b->state) {
         case BOSS_OBSERVE: {
             b->stateTimer -= dt;
+            if (b->stateHoldTimer > 0.0f) b->stateHoldTimer -= dt;
             Vector2 toPlayer = Vector2Subtract(playerPos, b->pos);
             Vector2 dirToPlayer = SafeNormalize(toPlayer);
             Vector2 lateral = (Vector2){-dirToPlayer.y, dirToPlayer.x};
             Vector2 move = {0};
 
+            float observeSpeed = b->observeSpeed * ((b->phase == 2) ? 1.15f : 1.0f);
             float idealDistance = b->observeDistance;
             float distanceDelta = dist - idealDistance;
             if (fabsf(distanceDelta) > 30.0f) {
-                float speed = b->observeSpeed * ((distanceDelta > 0.0f) ? 1.25f : 0.85f);
+                float speed = observeSpeed * ((distanceDelta > 0.0f) ? 1.25f : 0.85f);
                 move = Vector2Scale(dirToPlayer, speed * (distanceDelta > 0.0f ? 1.0f : -1.0f) * dt);
             } else {
-                move = Vector2Scale(lateral, b->observeSpeed * 0.55f * dt);
+                move = Vector2Scale(lateral, observeSpeed * 0.55f * dt);
             }
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, move);
 
-            if (dist > b->pursuitDistance) {
+            if (dist > b->pursuitDistance + 28.0f && b->stateHoldTimer <= 0.0f) {
                 EnterHunt(b);
             } else if (b->stateTimer <= 0.0f) {
                 if (dist <= b->attackRange * 1.1f) {
@@ -207,8 +227,27 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
         } break;
 
         case BOSS_HUNT: {
+            b->stateTimer += dt;
+            if (b->stateHoldTimer > 0.0f) b->stateHoldTimer -= dt;
+
             Vector2 dirToPlayer = SafeNormalize(Vector2Subtract(playerPos, b->pos));
-            Vector2 delta = Vector2Scale(dirToPlayer, b->huntSpeed * dt);
+            float targetSpeed = b->huntSpeed * ((b->phase == 2) ? 1.15f : 1.0f);
+            if (b->huntDashActive) {
+                targetSpeed *= 2.8f;
+                b->huntDashDuration -= dt;
+                if (b->huntDashDuration <= 0.0f) {
+                    b->huntDashActive = false;
+                    b->huntDashDuration = 0.18f;
+                }
+            } else {
+                b->huntDashTimer -= dt;
+                if (b->huntDashTimer <= 0.0f && dist > b->attackRange * 0.85f && rand() % 3 == 0) {
+                    b->huntDashActive = true;
+                    b->huntDashTimer = b->huntDashCooldown;
+                }
+            }
+
+            Vector2 delta = Vector2Scale(dirToPlayer, targetSpeed * dt);
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
 
             if (dist <= b->attackRange) {
@@ -219,7 +258,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     if (b->phase == 2 && rand() % 2 == 0) StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
                     else StartAttack(b, BOSS_ATTACK_TYPE_BRUTAL, playerPos);
                 }
-            } else if (dist <= b->observeDistance * 1.05f) {
+            } else if (dist <= b->observeDistance - 28.0f && b->stateHoldTimer <= 0.0f) {
                 EnterObserve(b);
             }
         } break;
@@ -233,7 +272,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
 
             switch (b->attackType) {
                 case BOSS_ATTACK_TYPE_LIGHT: {
-                    float baseWindup = b->lightWindup;
+                    float baseWindup = GetPhaseWindup(b, b->lightWindup);
                     float perHit = b->lightWindup + b->lightActive + b->lightRecovery;
                     int currentHit = (int)(b->stateTimer / perHit);
                     if (currentHit >= b->lightMaxHits) currentHit = b->lightMaxHits - 1;
@@ -243,15 +282,16 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     totalEnd = perHit * b->lightMaxHits;
                     cooldown = 0.95f;
 
+                    int currentDamage = (currentHit == 0) ? b->lightDamage1 : (currentHit == 1) ? b->lightDamage2 : b->lightDamage3;
                     if (currentHit < b->lightMaxHits && localT >= windupEnd && localT < activeEnd) {
                         if (!b->hasHitPlayerThisAttack) {
                             b->atk.active = true;
-                            b->atk.damage = b->lightDamage;
+                            b->atk.damage = currentDamage;
                             b->atk.radius = b->lightHitRadius;
                             b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
                             if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                                 b->hasHitPlayerThisAttack = true;
-                                printf("[HIT] Leve acertou o player: %d HP\n", b->lightDamage);
+                                printf("[HIT] Leve acertou o player: %d HP\n", currentDamage);
                             }
                         }
                     } else {
@@ -261,24 +301,26 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 } break;
 
                 case BOSS_ATTACK_TYPE_HEAVY: {
+                    float baseWindup = GetPhaseWindup(b, b->heavyWindup);
                     float perHit = b->heavyWindup + b->heavyActive + b->heavyRecovery;
                     int currentHit = (int)(b->stateTimer / perHit);
                     if (currentHit >= b->heavyMaxHits) currentHit = b->heavyMaxHits - 1;
                     float localT = fmodf(b->stateTimer, perHit);
-                    windupEnd = (currentHit == 0) ? b->heavyWindup : b->heavyWindup * 0.7f;
+                    windupEnd = (currentHit == 0) ? baseWindup : b->heavyWindup * 0.7f;
                     activeEnd = windupEnd + b->heavyActive;
                     totalEnd = perHit * b->heavyMaxHits;
                     cooldown = 1.35f;
 
+                    int currentDamage = (currentHit == 0) ? b->heavyDamage1 : b->heavyDamage2;
                     if (currentHit < b->heavyMaxHits && localT >= windupEnd && localT < activeEnd) {
                         if (!b->hasHitPlayerThisAttack) {
                             b->atk.active = true;
-                            b->atk.damage = b->heavyDamage;
+                            b->atk.damage = currentDamage;
                             b->atk.radius = b->heavyHitRadius;
                             b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
                             if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                                 b->hasHitPlayerThisAttack = true;
-                                printf("[HIT] Heavy acertou o player: %d HP\n", b->heavyDamage);
+                                printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
                             }
                         }
                     } else {
@@ -288,16 +330,14 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 } break;
 
                 case BOSS_ATTACK_TYPE_BRUTAL: {
-                    windupEnd = b->brutalWindup;
-                    activeEnd = b->brutalWindup + b->brutalActive;
-                    totalEnd = b->brutalWindup + b->brutalActive + b->brutalRecovery;
+                    windupEnd = GetPhaseWindup(b, b->brutalWindup);
+                    activeEnd = windupEnd + b->brutalActive;
+                    totalEnd = windupEnd + b->brutalActive + b->brutalRecovery;
                     cooldown = 1.15f;
 
-                    if (b->stateTimer <= activeEnd) {
+                    if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
                         Vector2 delta = Vector2Scale(b->attackDir, b->brutalLungeSpeed * dt);
                         MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
-                    }
-                    if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
                         b->atk.active = true;
                         b->atk.damage = b->brutalDamage;
                         b->atk.radius = b->brutalHitRadius;
@@ -314,7 +354,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 } break;
 
                 case BOSS_ATTACK_TYPE_PROJECTILE: {
-                    windupEnd = 0.80f;
+                    windupEnd = GetPhaseWindup(b, 0.80f);
                     activeEnd = windupEnd + 0.12f;
                     totalEnd = windupEnd + 1.10f;
                     cooldown = 1.05f;
@@ -327,17 +367,20 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                         b->projDir = b->attackDir;
                         b->atk.active = true;
                         b->atk.center = b->projPos;
-                        b->atk.radius = b->projRadius;
+                        b->atk.radius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
                         b->atk.damage = b->projDamage;
                     }
                     if (b->projActive) {
-                        Vector2 move = Vector2Scale(b->projDir, b->projSpeed * dt);
+                        float projSpeed = b->projSpeed * ((b->phase == 2) ? 1.55f : 1.0f);
+                        float projRadius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
+                        Vector2 move = Vector2Scale(b->projDir, projSpeed * dt);
                         float newx = b->projPos.x + move.x;
                         float newy = b->projPos.y + move.y;
-                        if (CanMoveCircle(level, newx, newy, b->projRadius)) {
+                        if (CanMoveCircle(level, newx, newy, projRadius)) {
                             b->projPos.x = newx;
                             b->projPos.y = newy;
                             b->atk.center = b->projPos;
+                            b->atk.radius = projRadius;
                         } else {
                             b->projActive = false;
                             b->atk.active = false;
@@ -352,9 +395,9 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 } break;
 
                 case BOSS_ATTACK_TYPE_AOE_BURST: {
-                    windupEnd = b->aoeWindup;
-                    activeEnd = b->aoeWindup + b->aoeActive;
-                    totalEnd = b->aoeWindup + b->aoeActive + b->aoeRecovery;
+                    windupEnd = GetPhaseWindup(b, b->aoeWindup);
+                    activeEnd = windupEnd + b->aoeActive;
+                    totalEnd = windupEnd + b->aoeActive + b->aoeRecovery;
                     cooldown = 1.4f;
 
                     if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
@@ -411,9 +454,9 @@ void Boss_Draw(const Boss *b) {
 
     Color col = (Color){ 160, 70, 40, 255 };
     if (b->state == BOSS_OBSERVE) {
-        col = (Color){120, 80, 60, 255};
+        col = (b->phase == 2) ? (Color){150, 80, 190, 255} : (Color){120, 80, 60, 255};
     } else if (b->state == BOSS_HUNT) {
-        col = (Color){180, 90, 40, 255};
+        col = (b->phase == 2) ? (Color){170, 90, 220, 255} : (Color){180, 90, 40, 255};
     } else if (b->state == BOSS_ATTACK) {
         bool inWindup = false;
         switch (b->attackType) {
