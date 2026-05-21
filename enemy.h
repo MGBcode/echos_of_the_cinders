@@ -36,6 +36,8 @@ typedef struct {
 
     BossState state;
     BossAttackType attackType;
+    BossAttackType lastAttackType;
+    int attackRepeatCount;
     float stateTimer;
 
     float sizeScale;

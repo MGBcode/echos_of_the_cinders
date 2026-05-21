@@ -18,6 +18,12 @@ static float GetPhaseWindup(const Boss *b, float baseWindup) {
     return (b->phase == 2) ? baseWindup * 0.75f : baseWindup;
 }
 
+static float GetAttackCooldown(const Boss *b, float baseCooldown) {
+    float cooldown = baseCooldown * 0.85f; // agressividade geral
+    if (b->phase == 2) cooldown *= 0.85f;   // fase 2 reduz ainda mais a punição
+    return cooldown;
+}
+
 // Colisão em tiles (igual ao player, mas para o boss)
 static bool CanMoveCircle(Level *level, float x, float y, float r) {
     int tw = level->tamanho_tile;
@@ -64,6 +70,8 @@ void Boss_Init(Boss *b, Vector2 startPos) {
 
     b->state = BOSS_OBSERVE;
     b->attackType = BOSS_ATTACK_TYPE_LIGHT;
+    b->lastAttackType = BOSS_ATTACK_TYPE_LIGHT;
+    b->attackRepeatCount = 0;
     b->stateTimer = 1.2f;
     b->stateHoldTimer = 0.0f;
     b->stateHoldMinObserve = 0.85f;
@@ -95,13 +103,14 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->lightDamage2 = 10;
     b->lightDamage3 = 15;
     b->lightMaxHits = 3;
+    b->lightHitIndex = 0;
 
     // Brutal attack
     b->brutalWindup = 0.95f;
-    b->brutalActive = 0.28f;
+    b->brutalActive = 0.46f;
     b->brutalRecovery = 1.10f;
     b->brutalHitRadius = 68.0f * b->sizeScale;
-    b->brutalLungeSpeed = 450.0f;
+    b->brutalLungeSpeed = 780.0f;
     b->brutalDamage = 40;
 
     // Heavy attack
@@ -113,6 +122,7 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->heavyDamage1 = 30;
     b->heavyDamage2 = 50;
     b->heavyMaxHits = 2;
+    b->heavyHitIndex = 0;
 
     b->atk = (AttackCircle){0};
     b->attackDir = (Vector2){1, 0};
@@ -151,7 +161,55 @@ static void EnterHunt(Boss *b) {
     b->projActive = false;
 }
 
+static BossAttackType ChooseAttack(Boss *b, BossAttackType attackType, BossAttackType alternateType) {
+    if (attackType == b->lastAttackType) {
+        if (b->attackRepeatCount >= 2) {
+            attackType = alternateType;
+        }
+    }
+
+    if (attackType == b->lastAttackType) {
+        b->attackRepeatCount++;
+    } else {
+        b->lastAttackType = attackType;
+        b->attackRepeatCount = 1;
+    }
+    return attackType;
+}
+
+static BossAttackType SelectAttackByDistance(Boss *b, float dist) {
+    float shortRange = b->attackRange * 0.65f;
+    float midRange = b->attackRange * 0.90f;
+    int roll = rand() % 100;
+
+    if (dist <= shortRange) {
+        if (roll < 65) return BOSS_ATTACK_TYPE_LIGHT;
+        if (roll < 90) return BOSS_ATTACK_TYPE_HEAVY;
+        return BOSS_ATTACK_TYPE_LIGHT;
+    }
+
+    if (dist <= midRange) {
+        if (roll < 55) return BOSS_ATTACK_TYPE_BRUTAL;
+        if (roll < 85) return BOSS_ATTACK_TYPE_HEAVY;
+        return (b->phase == 2) ? BOSS_ATTACK_TYPE_PROJECTILE : BOSS_ATTACK_TYPE_BRUTAL;
+    }
+
+    // Long distance, only attack if player entrou no alcance justo ou phase 2 projectile punishes
+    if (b->phase == 2) {
+        if (roll < 70) return BOSS_ATTACK_TYPE_PROJECTILE;
+        return BOSS_ATTACK_TYPE_BRUTAL;
+    }
+    return BOSS_ATTACK_TYPE_BRUTAL;
+}
+
 static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
+    if (attackType != b->lastAttackType) {
+        b->lastAttackType = attackType;
+        b->attackRepeatCount = 1;
+    } else if (b->attackRepeatCount == 0) {
+        b->attackRepeatCount = 1;
+    }
+
     b->state = BOSS_ATTACK;
     b->attackType = attackType;
     b->stateTimer = 0.0f;
@@ -159,6 +217,8 @@ static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
     b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
     b->atk.active = false;
     b->hasHitPlayerThisAttack = false;
+    b->lightHitIndex = 0;
+    b->heavyHitIndex = 0;
     b->projActive = false;
 }
 
@@ -214,11 +274,13 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             } else if (b->stateTimer <= 0.0f) {
                 if (dist <= b->attackRange * 1.1f) {
                     if (dist <= b->attackRange * 0.75f) {
-                        int choice = rand() % 2;
-                        StartAttack(b, choice == 0 ? BOSS_ATTACK_TYPE_LIGHT : BOSS_ATTACK_TYPE_HEAVY, playerPos);
+                        BossAttackType desired = SelectAttackByDistance(b, dist);
+                        BossAttackType alternate = (desired == BOSS_ATTACK_TYPE_LIGHT) ? BOSS_ATTACK_TYPE_HEAVY : BOSS_ATTACK_TYPE_LIGHT;
+                        StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
                     } else {
-                        if (b->phase == 2 && rand() % 2 == 0) StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
-                        else StartAttack(b, BOSS_ATTACK_TYPE_BRUTAL, playerPos);
+                        BossAttackType desired = SelectAttackByDistance(b, dist);
+                        BossAttackType alternate = (desired == BOSS_ATTACK_TYPE_PROJECTILE) ? BOSS_ATTACK_TYPE_BRUTAL : BOSS_ATTACK_TYPE_PROJECTILE;
+                        StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
                     }
                 } else {
                     EnterHunt(b);
@@ -251,13 +313,12 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, delta);
 
             if (dist <= b->attackRange) {
-                if (dist <= b->attackRange * 0.8f) {
-                    int choice = rand() % 2;
-                    StartAttack(b, choice == 0 ? BOSS_ATTACK_TYPE_LIGHT : BOSS_ATTACK_TYPE_HEAVY, playerPos);
-                } else {
-                    if (b->phase == 2 && rand() % 2 == 0) StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
-                    else StartAttack(b, BOSS_ATTACK_TYPE_BRUTAL, playerPos);
+                BossAttackType desired = SelectAttackByDistance(b, dist);
+                BossAttackType alternate = (desired == BOSS_ATTACK_TYPE_PROJECTILE) ? BOSS_ATTACK_TYPE_BRUTAL : BOSS_ATTACK_TYPE_PROJECTILE;
+                if (desired == BOSS_ATTACK_TYPE_LIGHT || desired == BOSS_ATTACK_TYPE_HEAVY) {
+                    alternate = (desired == BOSS_ATTACK_TYPE_LIGHT) ? BOSS_ATTACK_TYPE_HEAVY : BOSS_ATTACK_TYPE_LIGHT;
                 }
+                StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
             } else if (dist <= b->observeDistance - 28.0f && b->stateHoldTimer <= 0.0f) {
                 EnterObserve(b);
             }
@@ -277,13 +338,29 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     int currentHit = (int)(b->stateTimer / perHit);
                     if (currentHit >= b->lightMaxHits) currentHit = b->lightMaxHits - 1;
                     float localT = fmodf(b->stateTimer, perHit);
+                    float prevTimer = b->stateTimer - dt;
+                    float localPrevT = (prevTimer > 0.0f) ? fmodf(prevTimer, perHit) : 0.0f;
                     windupEnd = (currentHit == 0) ? baseWindup : 0.30f;
                     activeEnd = windupEnd + b->lightActive;
                     totalEnd = perHit * b->lightMaxHits;
-                    cooldown = 0.95f;
+                    cooldown = GetAttackCooldown(b, 0.95f);
+
+                    if (currentHit != b->lightHitIndex) {
+                        b->lightHitIndex = currentHit;
+                        b->hasHitPlayerThisAttack = false;
+                    }
+
+                    if (localT < windupEnd) {
+                        b->lockedTargetPos = playerPos;
+                        b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                    }
 
                     int currentDamage = (currentHit == 0) ? b->lightDamage1 : (currentHit == 1) ? b->lightDamage2 : b->lightDamage3;
                     if (currentHit < b->lightMaxHits && localT >= windupEnd && localT < activeEnd) {
+                        if (localPrevT < windupEnd) {
+                            Vector2 advance = Vector2Scale(b->attackDir, 220.0f * dt);
+                            MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
+                        }
                         if (!b->hasHitPlayerThisAttack) {
                             b->atk.active = true;
                             b->atk.damage = currentDamage;
@@ -295,7 +372,6 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                             }
                         }
                     } else {
-                        if (localT >= activeEnd) b->hasHitPlayerThisAttack = false;
                         b->atk.active = false;
                     }
                 } break;
@@ -306,13 +382,29 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     int currentHit = (int)(b->stateTimer / perHit);
                     if (currentHit >= b->heavyMaxHits) currentHit = b->heavyMaxHits - 1;
                     float localT = fmodf(b->stateTimer, perHit);
+                    float prevTimer = b->stateTimer - dt;
+                    float localPrevT = (prevTimer > 0.0f) ? fmodf(prevTimer, perHit) : 0.0f;
                     windupEnd = (currentHit == 0) ? baseWindup : b->heavyWindup * 0.7f;
                     activeEnd = windupEnd + b->heavyActive;
                     totalEnd = perHit * b->heavyMaxHits;
-                    cooldown = 1.35f;
+                    cooldown = GetAttackCooldown(b, 1.35f);
+
+                    if (currentHit != b->heavyHitIndex) {
+                        b->heavyHitIndex = currentHit;
+                        b->hasHitPlayerThisAttack = false;
+                    }
+
+                    if (localT < windupEnd) {
+                        b->lockedTargetPos = playerPos;
+                        b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                    }
 
                     int currentDamage = (currentHit == 0) ? b->heavyDamage1 : b->heavyDamage2;
                     if (currentHit < b->heavyMaxHits && localT >= windupEnd && localT < activeEnd) {
+                        if (localPrevT < windupEnd) {
+                            Vector2 advance = Vector2Scale(b->attackDir, 220.0f * dt);
+                            MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
+                        }
                         if (!b->hasHitPlayerThisAttack) {
                             b->atk.active = true;
                             b->atk.damage = currentDamage;
@@ -333,7 +425,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     windupEnd = GetPhaseWindup(b, b->brutalWindup);
                     activeEnd = windupEnd + b->brutalActive;
                     totalEnd = windupEnd + b->brutalActive + b->brutalRecovery;
-                    cooldown = 1.15f;
+                    cooldown = GetAttackCooldown(b, 1.15f);
 
                     if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
                         Vector2 delta = Vector2Scale(b->attackDir, b->brutalLungeSpeed * dt);
@@ -357,7 +449,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     windupEnd = GetPhaseWindup(b, 0.80f);
                     activeEnd = windupEnd + 0.12f;
                     totalEnd = windupEnd + 1.10f;
-                    cooldown = 1.05f;
+                    cooldown = GetAttackCooldown(b, 1.05f);
 
                     if (b->stateTimer < windupEnd) {
                         b->atk.active = false;
@@ -398,7 +490,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     windupEnd = GetPhaseWindup(b, b->aoeWindup);
                     activeEnd = windupEnd + b->aoeActive;
                     totalEnd = windupEnd + b->aoeActive + b->aoeRecovery;
-                    cooldown = 1.4f;
+                    cooldown = GetAttackCooldown(b, 1.4f);
 
                     if (b->stateTimer >= windupEnd && b->stateTimer < activeEnd) {
                         b->atk.active = true;
@@ -453,6 +545,12 @@ void Boss_Draw(const Boss *b) {
     }
 
     Color col = (Color){ 160, 70, 40, 255 };
+    bool drawWindupTelegraph = false;
+    bool drawActiveTelegraph = false;
+    Vector2 teleCenter = b->atk.center;
+    float teleRadius = b->atk.radius;
+    Color teleColor = YELLOW;
+
     if (b->state == BOSS_OBSERVE) {
         col = (b->phase == 2) ? (Color){150, 80, 190, 255} : (Color){120, 80, 60, 255};
     } else if (b->state == BOSS_HUNT) {
@@ -460,26 +558,88 @@ void Boss_Draw(const Boss *b) {
     } else if (b->state == BOSS_ATTACK) {
         bool inWindup = false;
         switch (b->attackType) {
-            case BOSS_ATTACK_TYPE_LIGHT:
-                inWindup = (b->stateTimer < b->lightWindup);
+            case BOSS_ATTACK_TYPE_LIGHT: {
+                float perHit = b->lightWindup + b->lightActive + b->lightRecovery;
+                int currentHit = (int)(b->stateTimer / perHit);
+                if (currentHit >= b->lightMaxHits) currentHit = b->lightMaxHits - 1;
+                float localT = fmodf(b->stateTimer, perHit);
+                float windupEnd = (currentHit == 0) ? b->lightWindup : 0.30f;
+                float activeEnd = windupEnd + b->lightActive;
+                teleRadius = b->lightHitRadius;
+                teleCenter = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
+                if (localT < windupEnd) {
+                    inWindup = true;
+                    drawWindupTelegraph = true;
+                    teleColor = (Color){240, 180, 40, 180};
+                } else if (localT < activeEnd) {
+                    drawActiveTelegraph = true;
+                    teleColor = (Color){220, 40, 40, 180};
+                }
                 col = inWindup ? YELLOW : GOLD;
-                break;
-            case BOSS_ATTACK_TYPE_HEAVY:
-                inWindup = (b->stateTimer < b->heavyWindup);
+            } break;
+            case BOSS_ATTACK_TYPE_HEAVY: {
+                float perHit = b->heavyWindup + b->heavyActive + b->heavyRecovery;
+                int currentHit = (int)(b->stateTimer / perHit);
+                if (currentHit >= b->heavyMaxHits) currentHit = b->heavyMaxHits - 1;
+                float localT = fmodf(b->stateTimer, perHit);
+                float windupEnd = (currentHit == 0) ? b->heavyWindup : b->heavyWindup * 0.7f;
+                float activeEnd = windupEnd + b->heavyActive;
+                teleRadius = b->heavyHitRadius;
+                teleCenter = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
+                if (localT < windupEnd) {
+                    inWindup = true;
+                    drawWindupTelegraph = true;
+                    teleColor = (Color){220, 140, 30, 180};
+                } else if (localT < activeEnd) {
+                    drawActiveTelegraph = true;
+                    teleColor = (Color){200, 30, 30, 180};
+                }
                 col = inWindup ? ORANGE : (Color){200, 120, 60, 255};
-                break;
-            case BOSS_ATTACK_TYPE_BRUTAL:
-                inWindup = (b->stateTimer < b->brutalWindup);
+            } break;
+            case BOSS_ATTACK_TYPE_BRUTAL: {
+                float windupEnd = b->brutalWindup;
+                float activeEnd = b->brutalWindup + b->brutalActive;
+                teleRadius = b->brutalHitRadius;
+                teleCenter = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + teleRadius * 0.6f));
+                if (b->stateTimer < windupEnd) {
+                    inWindup = true;
+                    drawWindupTelegraph = true;
+                    teleColor = (Color){220, 120, 30, 180};
+                } else if (b->stateTimer < activeEnd) {
+                    drawActiveTelegraph = true;
+                    teleColor = (Color){200, 40, 40, 180};
+                }
                 col = inWindup ? ORANGE : RED;
-                break;
-            case BOSS_ATTACK_TYPE_PROJECTILE:
-                inWindup = (b->stateTimer < 0.80f);
+            } break;
+            case BOSS_ATTACK_TYPE_PROJECTILE: {
+                float windupEnd = 0.80f;
+                teleRadius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
+                teleCenter = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + teleRadius + 4.0f));
+                if (b->stateTimer < windupEnd) {
+                    inWindup = true;
+                    drawWindupTelegraph = true;
+                    teleColor = (Color){240, 220, 40, 170};
+                } else if (b->projActive) {
+                    drawActiveTelegraph = true;
+                    teleColor = (Color){220, 160, 30, 180};
+                }
                 col = inWindup ? YELLOW : GOLD;
-                break;
-            case BOSS_ATTACK_TYPE_AOE_BURST:
-                inWindup = (b->stateTimer < b->aoeWindup);
+            } break;
+            case BOSS_ATTACK_TYPE_AOE_BURST: {
+                float windupEnd = b->aoeWindup;
+                float activeEnd = b->aoeWindup + b->aoeActive;
+                teleRadius = b->aoeRadius;
+                teleCenter = b->pos;
+                if (b->stateTimer < windupEnd) {
+                    inWindup = true;
+                    drawWindupTelegraph = true;
+                    teleColor = (Color){180, 40, 40, 170};
+                } else if (b->stateTimer < activeEnd) {
+                    drawActiveTelegraph = true;
+                    teleColor = (Color){200, 50, 50, 200};
+                }
                 col = inWindup ? (Color){120, 20, 20, 255} : RED;
-                break;
+            } break;
             default:
                 col = RED;
                 break;
@@ -491,11 +651,11 @@ void Boss_Draw(const Boss *b) {
 
     DrawCircleV(b->pos, b->raio, col);
 
-    if (b->atk.active) {
-        Color hb = RED;
-        if (b->attackType == BOSS_ATTACK_TYPE_PROJECTILE) hb = YELLOW;
-        else if (b->attackType == BOSS_ATTACK_TYPE_AOE_BURST) hb = (Color){200, 40, 40, 200};
-        DrawCircleLines((int)b->atk.center.x, (int)b->atk.center.y, b->atk.radius, hb);
+    if (drawWindupTelegraph) {
+        DrawCircleLines((int)teleCenter.x, (int)teleCenter.y, teleRadius, teleColor);
+    }
+    if (drawActiveTelegraph) {
+        DrawCircle((int)teleCenter.x, (int)teleCenter.y, teleRadius, teleColor);
     }
 
     // REMOVIDO: HUD de HP do boss daqui.

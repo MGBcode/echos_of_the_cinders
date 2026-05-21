@@ -3,6 +3,7 @@
 #include "level.h"
 #include "enemy.h"
 #include <stdio.h>
+#include <math.h>
 
 // HUD do boss (barra larga no centro inferior)
 static void DrawBossHUD(const Boss *boss) {
@@ -84,6 +85,8 @@ int main(void) {
             // Ajusta a posição do jogador proporcionalmente
             cavaleiro.pos.x *= scaleX;
             cavaleiro.pos.y *= scaleY;
+            boss.pos.x *= scaleX;
+            boss.pos.y *= scaleY;
 
             // Atualiza as métricas do mapa e do player
             level_atualizar_tile(&level);
@@ -97,10 +100,26 @@ int main(void) {
             UpdatePlayer(&cavaleiro, deltaTime, &level);
             Boss_Update(&boss, deltaTime, cavaleiro.pos, cavaleiro.raio, &level);
 
+            // Colisão sólida entre Player e Boss
+            {
+                float dx = cavaleiro.pos.x - boss.pos.x;
+                float dy = cavaleiro.pos.y - boss.pos.y;
+                float dist = sqrtf(dx * dx + dy * dy);
+                float minDist = cavaleiro.raio + boss.raio;
+                if (dist < minDist) {
+                    if (dist > 0.001f) {
+                        float push = minDist - dist + 0.5f;
+                        cavaleiro.pos.x += dx / dist * push;
+                        cavaleiro.pos.y += dy / dist * push;
+                    } else {
+                        cavaleiro.pos.x += minDist;
+                    }
+                }
+            }
+
             // Dano no boss por colisão com hitbox do player (sem mexer no player)
             // Observação: aqui o dano é fixo só para validar HUD/feedback.
             const int PLAYER_DEBUG_DAMAGE = 10;
-            const int BOSS_ATTACK_DAMAGE = 15;
 
             bool hitboxActiveNow = cavaleiro.isHitboxActive;
 
@@ -122,7 +141,7 @@ int main(void) {
             if (bossAttackActive && !lastBossAttackActive && cavaleiro.hp > 0) {
                 if (CheckCollisionCircles(bossAttack.center, bossAttack.radius,
                                           cavaleiro.pos, cavaleiro.raio)) {
-                    PlayerTakeDamage(&cavaleiro, BOSS_ATTACK_DAMAGE);
+                    PlayerTakeDamage(&cavaleiro, bossAttack.damage);
                 }
             }
             
