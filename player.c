@@ -48,6 +48,10 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->staminaRecoveryDelay = 1.5f;
     player->staminaRecoveryDelayCounter = 0.0f;
     player->staminaRecoveryRate = 25.0f; // 20 pontos por segundo
+    player->frascosMax = 3;
+    player->frascosAtuais = 3;
+    player->isHealing = false;
+    player->healingTimer = 0.0f;
     player->alive = true;
 }
 
@@ -68,6 +72,16 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
 
     if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
         player->cooldownTimeCounter -= deltaTime;
+
+    if (player->isHealing) {
+        player->healingTimer -= deltaTime;
+        if (player->healingTimer <= 0.0f) {
+            player->healingTimer = 0.0f;
+            player->isHealing = false;
+            player->hp += 60;
+            if (player->hp > player->hpMax) player->hp = player->hpMax;
+        }
+    }
 
     Vector2 inputDir = { 0.0f, 0.0f };
     bool rightDown = IsKeyDown(KEY_D);
@@ -118,7 +132,13 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->diagonalBufferTimer = 0;
     }
 
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->stamina >= 15.0f) {
+    if (IsKeyPressed(KEY_Q) && player->frascosAtuais > 0 && !player->isDashing && player->attackState == 0 && !player->isHealing) {
+        player->isHealing = true;
+        player->healingTimer = 1.0f;
+        player->frascosAtuais -= 1;
+    }
+
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->stamina >= 15.0f && !player->isHealing) {
         player->attackState = 0;
         player->attackStateTimer = 0.0f;
         player->comboStep = 0;
@@ -153,6 +173,15 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             }
         }
 
+    }
+
+    if (player->isHealing) {
+        // While healing we can still move, but at reduced speed and no dash/attack allowed.
+        player->attackState = 0;
+        player->attackStateTimer = 0.0f;
+        player->comboStep = 0;
+        player->isHitboxActive = false;
+        player->hasHitEnemy = false;
     }
 
     if (player->attackState == 1) {
@@ -214,6 +243,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
 
     float velX = 0;
     float velY = 0;
+    float movementSpeed = player->normalSpeed * (player->isHealing ? 0.4f : 1.0f);
 
     if (player->isDashing) {
         velX = player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
@@ -234,8 +264,8 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         velY = 0;
     } else {
         // normal movement (includes recovery and none)
-        velX = inputDir.x * player->normalSpeed * deltaTime;
-        velY = inputDir.y * player->normalSpeed * deltaTime;
+        velX = inputDir.x * movementSpeed * deltaTime;
+        velY = inputDir.y * movementSpeed * deltaTime;
     }
 
     float novo_x = player->pos.x + velX;
@@ -265,6 +295,8 @@ void DrawPlayer(Player player) {
 
 // HUD - Funções de Vida e Estamina
 void PlayerTakeDamage(Player *player, int damage) {
+    if (player->isDashing) return;
+
     player->hp -= damage;
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {

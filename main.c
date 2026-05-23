@@ -163,6 +163,10 @@ int main(void) {
             // Texto de ajuda - abaixo do HUD do player
             DrawText("Alt+Enter para Fullscreen", 10, 110, 20, GRAY);
             DrawText("C para Pausar/Resumir", 10, 140, 20, GRAY);
+            DrawText(TextFormat("Curas: %d / %d", cavaleiro.frascosAtuais, cavaleiro.frascosMax), 10, 170, 20, LIGHTGRAY);
+            if (cavaleiro.isHealing) {
+                DrawText("Curando...", 10, 200, 20, GOLD);
+            }
 
             // HUD do boss (centro inferior)
             DrawBossHUD(&boss);

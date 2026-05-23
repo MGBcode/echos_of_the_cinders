@@ -32,6 +32,10 @@ typedef struct {
     float hitboxRadius;
     bool isHitboxActive;
     bool hasHitEnemy;
+    int frascosMax;
+    int frascosAtuais;
+    bool isHealing;
+    float healingTimer;
     // HUD - Vida e Estamina
     int hp;
     int hpMax;
