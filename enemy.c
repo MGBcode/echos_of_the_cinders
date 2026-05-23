@@ -141,7 +141,7 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->projPos = startPos;
     b->projDir = (Vector2){0,0};
     b->projSpeed = 640.0f;
-    b->projRadius = 14.0f * b->sizeScale;
+    b->projRadius = 18.0f * b->sizeScale;
     b->projDamage = 20;
 }
 

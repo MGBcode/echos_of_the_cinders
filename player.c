@@ -28,8 +28,8 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->lastHorizontalInput = 1;
     player->lastVerticalInput = 0;
     player->comboStep = 0;
-    player->attackWindup[0] = 0.70f; player->attackActive[0] = 0.10f; player->attackRecovery[0] = 0.6f;
-    player->attackWindup[1] = 0.50f; player->attackActive[1] = 0.10f; player->attackRecovery[1] = 0.6f;
+    player->attackWindup[0] = 0.40f; player->attackActive[0] = 0.10f; player->attackRecovery[0] = 0.6f;
+    player->attackWindup[1] = 0.30f; player->attackActive[1] = 0.10f; player->attackRecovery[1] = 0.6f;
     player->attackWindup[2] = 0.12f; player->attackActive[2] = 0.40f; player->attackRecovery[2] = 0.2f;
     player->attackState = 0;
     player->attackStateTimer = 0.0f;
@@ -45,9 +45,9 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->hp = player->hpMax;
     player->staminaMax = 100.0f;
     player->stamina = player->staminaMax;
-    player->staminaRecoveryDelay = 2.0f;
+    player->staminaRecoveryDelay = 1.5f;
     player->staminaRecoveryDelayCounter = 0.0f;
-    player->staminaRecoveryRate = 20.0f; // 20 pontos por segundo
+    player->staminaRecoveryRate = 25.0f; // 20 pontos por segundo
     player->alive = true;
 }
 
