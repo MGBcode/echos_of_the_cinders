@@ -29,6 +29,24 @@ typedef struct {
 
 typedef struct {
     Vector2 pos;
+    Vector2 dir;
+    float speed;
+    float radius;
+    int damage;
+    bool active;
+} BossProjectile;
+
+typedef struct ProjectileNode {
+    Vector2 pos;
+    Vector2 dir;
+    float speed;
+    float radius;
+    int damage;
+    struct ProjectileNode *next;
+} ProjectileNode;
+
+typedef struct {
+    Vector2 pos;
     float raio;
 
     int hp;
@@ -107,13 +125,12 @@ typedef struct {
     float aoeRadius;
     int   aoeDamage;
 
-    // Projetil
-    bool  projActive;
-    Vector2 projPos;
-    Vector2 projDir;
-    float projSpeed;
-    float projRadius;
-    int   projDamage;
+    // Projéteis (Lista encadeada)
+    ProjectileNode *projectilesHead;
+    int   projBurstShot;
+    int   projBurstTotal;
+    float projBurstTimer;
+    float projBurstInterval;
 } Boss;
 
 void Boss_Init(Boss *b, Vector2 startPos);

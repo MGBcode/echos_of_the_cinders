@@ -8,10 +8,42 @@ static float RandRange(float a, float b) {
     return a + (b - a) * t;
 }
 
+static ProjectileNode *ProjectileNode_Create(Vector2 pos, Vector2 dir, float speed, float radius, int damage) {
+    ProjectileNode *node = (ProjectileNode *)malloc(sizeof(ProjectileNode));
+    if (node == NULL) return NULL;
+    node->pos = pos;
+    node->dir = dir;
+    node->speed = speed;
+    node->radius = radius;
+    node->damage = damage;
+    node->next = NULL;
+    return node;
+}
+
+static void ProjectileNode_AddToList(ProjectileNode **head, ProjectileNode *node) {
+    if (node == NULL) return;
+    node->next = *head;
+    *head = node;
+}
+
+static void ProjectileNode_FreeList(ProjectileNode **head) {
+    ProjectileNode *current = *head;
+    while (current != NULL) {
+        ProjectileNode *temp = current;
+        current = current->next;
+        free(temp);
+    }
+    *head = NULL;
+}
+
 static Vector2 SafeNormalize(Vector2 v) {
     float len = Vector2Length(v);
     if (len < 0.0001f) return (Vector2){1.0f, 0.0f};
     return Vector2Scale(v, 1.0f / len);
+}
+
+static bool Boss_CanUseProjectile(const Boss *b) {
+    return b->hp <= (b->hpMax / 2);
 }
 
 static float GetPhaseWindup(const Boss *b, float baseWindup) {
@@ -136,13 +168,12 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->aoeRadius = 180.0f * b->sizeScale;
     b->aoeDamage = 70;
 
-    // Projectile
-    b->projActive = false;
-    b->projPos = startPos;
-    b->projDir = (Vector2){0,0};
-    b->projSpeed = 640.0f;
-    b->projRadius = 18.0f * b->sizeScale;
-    b->projDamage = 20;
+    // Projéteis (Lista encadeada)
+    b->projectilesHead = NULL;
+    b->projBurstShot = 0;
+    b->projBurstTotal = 3;
+    b->projBurstTimer = 0.0f;
+    b->projBurstInterval = 0.30f;
 }
 
 static void EnterObserve(Boss *b) {
@@ -150,7 +181,6 @@ static void EnterObserve(Boss *b) {
     b->stateTimer = RandRange(1.0f, 1.6f);
     b->stateHoldTimer = b->stateHoldMinObserve;
     b->atk.active = false;
-    b->projActive = false;
 }
 
 static void EnterHunt(Boss *b) {
@@ -158,10 +188,14 @@ static void EnterHunt(Boss *b) {
     b->stateTimer = 0.0f;
     b->stateHoldTimer = b->stateHoldMinHunt;
     b->atk.active = false;
-    b->projActive = false;
 }
 
 static BossAttackType ChooseAttack(Boss *b, BossAttackType attackType, BossAttackType alternateType) {
+    if (!Boss_CanUseProjectile(b)) {
+        if (attackType == BOSS_ATTACK_TYPE_PROJECTILE) attackType = BOSS_ATTACK_TYPE_BRUTAL;
+        if (alternateType == BOSS_ATTACK_TYPE_PROJECTILE) alternateType = BOSS_ATTACK_TYPE_BRUTAL;
+    }
+
     if (attackType == b->lastAttackType) {
         if (b->attackRepeatCount >= 2) {
             attackType = alternateType;
@@ -203,6 +237,10 @@ static BossAttackType SelectAttackByDistance(Boss *b, float dist) {
 }
 
 static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
+    if (!Boss_CanUseProjectile(b) && attackType == BOSS_ATTACK_TYPE_PROJECTILE) {
+        attackType = BOSS_ATTACK_TYPE_BRUTAL;
+    }
+
     if (attackType != b->lastAttackType) {
         b->lastAttackType = attackType;
         b->attackRepeatCount = 1;
@@ -219,7 +257,8 @@ static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
     b->hasHitPlayerThisAttack = false;
     b->lightHitIndex = 0;
     b->heavyHitIndex = 0;
-    b->projActive = false;
+    b->projBurstShot = 0;
+    b->projBurstTimer = 0.0f;
 }
 
 void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level *level) {
@@ -237,6 +276,39 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
     float dist = Vector2Distance(b->pos, playerPos);
     float hpRatio = (float)b->hp / (float)b->hpMax;
     b->phase = (hpRatio > 0.5f) ? 1 : 2;
+
+    // Atualizar e gerenciar lista de projéteis independentes
+    {
+        ProjectileNode **current = &b->projectilesHead;
+        while (*current != NULL) {
+            ProjectileNode *proj = *current;
+            
+            // Atualizar posição
+            proj->pos.x += proj->dir.x * proj->speed * dt;
+            proj->pos.y += proj->dir.y * proj->speed * dt;
+            
+            // Verificar colisão com player
+            if (CheckCollisionCircles(proj->pos, proj->radius, playerPos, playerRadius)) {
+                // Aplicar dano
+                printf("[HIT] Projectile acertou o player: %d HP\\n", proj->damage);
+                // Remover da lista
+                *current = proj->next;
+                free(proj);
+                continue;
+            }
+            
+            // Verificar se saiu da tela/colisão com cenário
+            if (!CanMoveCircle(level, proj->pos.x, proj->pos.y, proj->radius)) {
+                // Remover da lista
+                *current = proj->next;
+                free(proj);
+                continue;
+            }
+            
+            // Mover para o próximo nó
+            current = &proj->next;
+        }
+    }
 
     if (!b->aoe50Triggered && hpRatio <= 0.5f) {
         b->aoe50Triggered = true;
@@ -269,6 +341,11 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             }
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, move);
 
+            if (b->phase == 2 && dist > b->pursuitDistance + 96.0f) {
+                StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
+                return;
+            }
+
             if (dist > b->pursuitDistance + 28.0f && b->stateHoldTimer <= 0.0f) {
                 EnterHunt(b);
             } else if (b->stateTimer <= 0.0f) {
@@ -276,10 +353,12 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     if (dist <= b->attackRange * 0.75f) {
                         BossAttackType desired = SelectAttackByDistance(b, dist);
                         BossAttackType alternate = (desired == BOSS_ATTACK_TYPE_LIGHT) ? BOSS_ATTACK_TYPE_HEAVY : BOSS_ATTACK_TYPE_LIGHT;
+                        if (!Boss_CanUseProjectile(b) && alternate == BOSS_ATTACK_TYPE_PROJECTILE) alternate = BOSS_ATTACK_TYPE_BRUTAL;
                         StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
                     } else {
                         BossAttackType desired = SelectAttackByDistance(b, dist);
                         BossAttackType alternate = (desired == BOSS_ATTACK_TYPE_PROJECTILE) ? BOSS_ATTACK_TYPE_BRUTAL : BOSS_ATTACK_TYPE_PROJECTILE;
+                        if (!Boss_CanUseProjectile(b) && alternate == BOSS_ATTACK_TYPE_PROJECTILE) alternate = BOSS_ATTACK_TYPE_BRUTAL;
                         StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
                     }
                 } else {
@@ -318,6 +397,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 if (desired == BOSS_ATTACK_TYPE_LIGHT || desired == BOSS_ATTACK_TYPE_HEAVY) {
                     alternate = (desired == BOSS_ATTACK_TYPE_LIGHT) ? BOSS_ATTACK_TYPE_HEAVY : BOSS_ATTACK_TYPE_LIGHT;
                 }
+                if (!Boss_CanUseProjectile(b) && alternate == BOSS_ATTACK_TYPE_PROJECTILE) alternate = BOSS_ATTACK_TYPE_BRUTAL;
                 StartAttack(b, ChooseAttack(b, desired, alternate), playerPos);
             } else if (dist <= b->observeDistance - 28.0f && b->stateHoldTimer <= 0.0f) {
                 EnterObserve(b);
@@ -397,6 +477,11 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                     if (localT < windupEnd) {
                         b->lockedTargetPos = playerPos;
                         b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                        if (currentHit == 1) {
+                            Vector2 dashDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                            Vector2 dashDelta = Vector2Scale(dashDir, 520.0f * dt);
+                            MoveWithCollision(level, &b->pos, b->raio * 1.1f, dashDelta);
+                        }
                     }
 
                     int currentDamage = (currentHit == 0) ? b->heavyDamage1 : b->heavyDamage2;
@@ -433,7 +518,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                         b->atk.active = true;
                         b->atk.damage = b->brutalDamage;
                         b->atk.radius = b->brutalHitRadius;
-                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->atk.radius * 0.6f));
+                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->brutalHitRadius * 0.6f));
                     } else {
                         b->atk.active = false;
                     }
@@ -447,40 +532,35 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
 
                 case BOSS_ATTACK_TYPE_PROJECTILE: {
                     windupEnd = GetPhaseWindup(b, 0.80f);
-                    activeEnd = windupEnd + 0.12f;
-                    totalEnd = windupEnd + 1.10f;
+                    totalEnd = windupEnd + b->projBurstInterval * (b->projBurstTotal - 1) + 1.10f;
                     cooldown = GetAttackCooldown(b, 1.05f);
 
                     if (b->stateTimer < windupEnd) {
+                        b->projBurstTimer = 0.0f;
                         b->atk.active = false;
-                    } else if (b->stateTimer >= windupEnd && !b->projActive) {
-                        b->projActive = true;
-                        b->projPos = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->projRadius + 4.0f));
-                        b->projDir = b->attackDir;
-                        b->atk.active = true;
-                        b->atk.center = b->projPos;
-                        b->atk.radius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
-                        b->atk.damage = b->projDamage;
-                    }
-                    if (b->projActive) {
-                        float projSpeed = b->projSpeed * ((b->phase == 2) ? 1.55f : 1.0f);
-                        float projRadius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
-                        Vector2 move = Vector2Scale(b->projDir, projSpeed * dt);
-                        float newx = b->projPos.x + move.x;
-                        float newy = b->projPos.y + move.y;
-                        if (CanMoveCircle(level, newx, newy, projRadius)) {
-                            b->projPos.x = newx;
-                            b->projPos.y = newy;
-                            b->atk.center = b->projPos;
-                            b->atk.radius = projRadius;
-                        } else {
-                            b->projActive = false;
-                            b->atk.active = false;
-                        }
-                        if (b->atk.active && !b->hasHitPlayerThisAttack) {
-                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
-                                b->hasHitPlayerThisAttack = true;
-                                printf("[HIT] Projectile acertou o player: %d HP\n", b->projDamage);
+                    } else {
+                        if (b->projBurstShot < b->projBurstTotal) {
+                            b->projBurstTimer -= dt;
+                            if (b->projBurstTimer <= 0.0f) {
+                                b->lockedTargetPos = playerPos;
+                                b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                                b->projBurstShot += 1;
+                                b->projBurstTimer = b->projBurstInterval;
+                                
+                                float projRadius = 22.0f * b->sizeScale * ((b->phase == 2) ? 1.15f : 1.0f);
+                                float projSpeed = 640.0f * ((b->phase == 2) ? 1.55f : 1.0f);
+                                Vector2 projPos = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + projRadius + 4.0f));
+                                
+                                ProjectileNode *newProj = ProjectileNode_Create(
+                                    projPos,
+                                    b->attackDir,
+                                    projSpeed,
+                                    projRadius,
+                                    20
+                                );
+                                if (newProj != NULL) {
+                                    ProjectileNode_AddToList(&b->projectilesHead, newProj);
+                                }
                             }
                         }
                     }
@@ -514,7 +594,6 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
             if (b->attackType != BOSS_ATTACK_TYPE_BRUTAL) {
                 if (b->stateTimer >= totalEnd) {
                     b->atk.active = false;
-                    b->projActive = false;
                     b->state = BOSS_COOLDOWN;
                     b->stateTimer = cooldown;
                 }
@@ -613,15 +692,9 @@ void Boss_Draw(const Boss *b) {
             } break;
             case BOSS_ATTACK_TYPE_PROJECTILE: {
                 float windupEnd = 0.80f;
-                teleRadius = b->projRadius * ((b->phase == 2) ? 1.15f : 1.0f);
-                teleCenter = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + teleRadius + 4.0f));
                 if (b->stateTimer < windupEnd) {
-                    inWindup = true;
-                    drawWindupTelegraph = true;
-                    teleColor = (Color){240, 220, 40, 170};
-                } else if (b->projActive) {
-                    drawActiveTelegraph = true;
-                    teleColor = (Color){220, 160, 30, 180};
+                    inWindup = false;
+                    drawWindupTelegraph = false;
                 }
                 col = inWindup ? YELLOW : GOLD;
             } break;
@@ -656,6 +729,13 @@ void Boss_Draw(const Boss *b) {
     }
     if (drawActiveTelegraph) {
         DrawCircle((int)teleCenter.x, (int)teleCenter.y, teleRadius, teleColor);
+    }
+
+    // Desenhar todos os projéteis da lista encadeada
+    ProjectileNode *proj = b->projectilesHead;
+    while (proj != NULL) {
+        DrawCircleV(proj->pos, proj->radius, RED);
+        proj = proj->next;
     }
 
     // REMOVIDO: HUD de HP do boss daqui.
