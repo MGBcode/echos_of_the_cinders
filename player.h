@@ -32,6 +32,9 @@ typedef struct {
     float hitboxRadius;
     bool isHitboxActive;
     bool hasHitEnemy;
+    bool isParrying;
+    float parryTimer;
+    float parryDuration;
     int frascosMax;
     int frascosAtuais;
     bool isHealing;
@@ -56,6 +59,7 @@ void DrawPlayer(Player player);
 
 // Funções de HUD - Vida e Estamina
 void PlayerTakeDamage(Player *player, int damage);
+void PlayerTakeDamage_IgnoreParry(Player *player, int damage);
 void PlayerUseStamina(Player *player, float amount);
 void UpdatePlayerStamina(Player *player, float deltaTime);
 void DrawPlayerHUD(const Player *player, int x, int y);

@@ -291,7 +291,7 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
             // Verificar colisão com player
             if (CheckCollisionCircles(proj->pos, proj->radius, playerPos, playerRadius)) {
                 printf("[HIT] Projectile acertou o player: %d HP\\n", proj->damage);
-                PlayerTakeDamage(player, proj->damage);
+                PlayerTakeDamage_IgnoreParry(player, proj->damage);
                 *current = proj->next;
                 free(proj);
                 continue;
@@ -454,8 +454,15 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                         b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
                         if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
-                            PlayerTakeDamage(player, b->atk.damage);
-                            printf("[HIT] Leve acertou o player: %d HP\n", currentDamage);
+                            if (player->isParrying) {
+                                b->atk.active = false;
+                                b->state = BOSS_COOLDOWN;
+                                b->stateTimer = GetAttackCooldown(b, 0.95f) * 1.75f;
+                                printf("[PARRY] Light Attack aparado! Boss em cooldown prolongado.\n");
+                            } else {
+                                PlayerTakeDamage(player, b->atk.damage);
+                                printf("[HIT] Leve acertou o player: %d HP\n", currentDamage);
+                            }
                         }
                     } else {
                         b->atk.active = false;
@@ -502,8 +509,15 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                         b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
                         if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
-                            PlayerTakeDamage(player, b->atk.damage);
-                            printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
+                            if (player->isParrying) {
+                                b->atk.active = false;
+                                b->state = BOSS_COOLDOWN;
+                                b->stateTimer = GetAttackCooldown(b, 1.35f) * 1.75f;
+                                printf("[PARRY] Heavy Attack aparado! Boss em cooldown prolongado.\n");
+                            } else {
+                                PlayerTakeDamage(player, b->atk.damage);
+                                printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
+                            }
                         }
                     } else {
                         if (localT >= activeEnd) b->hasHitPlayerThisAttack = false;
@@ -530,8 +544,15 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                     if (b->atk.active && !b->hasHitPlayerThisAttack) {
                         if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
-                            PlayerTakeDamage(player, b->atk.damage);
-                            printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
+                            if (player->isParrying) {
+                                b->atk.active = false;
+                                b->state = BOSS_COOLDOWN;
+                                b->stateTimer = GetAttackCooldown(b, 1.15f) * 1.75f;
+                                printf("[PARRY] Brutal Attack aparado! Boss em cooldown prolongado.\n");
+                            } else {
+                                PlayerTakeDamage(player, b->atk.damage);
+                                printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
+                            }
                         }
                     }
                 } break;
@@ -589,7 +610,7 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                     if (b->atk.active && !b->hasHitPlayerThisAttack) {
                         if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
-                            PlayerTakeDamage(player, b->atk.damage);
+                            PlayerTakeDamage_IgnoreParry(player, b->atk.damage);
                             printf("[HIT] AoE Burst acertou o player: %d HP\n", b->aoeDamage);
                         }
                     }

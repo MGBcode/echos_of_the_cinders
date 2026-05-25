@@ -38,6 +38,9 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->hitboxRadius = 0.0f;
     player->hitboxCenter = (Vector2){ 0, 0 };
     player->hasHitEnemy = false;
+    player->isParrying = false;
+    player->parryTimer = 0.0f;
+    player->parryDuration = 0.4f;
     player->raio = 15.0f;
     
     // HUD - Vida e Estamina
@@ -64,6 +67,15 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     
     // Atualizar estamina
     UpdatePlayerStamina(player, deltaTime);
+
+    // Atualizar timer de parry
+    if (player->isParrying) {
+        player->parryTimer -= deltaTime;
+        if (player->parryTimer <= 0.0f) {
+            player->isParrying = false;
+            player->parryTimer = 0.0f;
+        }
+    }
 
     // Se estiver morto, não processa entradas nem movimentos
     if (!player->alive) return;
@@ -150,8 +162,10 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
         PlayerUseStamina(player, 15.0f); // Consome 15 pontos de estamina
     }
-    // --- Attack state machine: 0=none,1=windup,2=active,3=recovery ---
+    // --- Attack/Parry state machine: 0=none,1=windup,2=active,3=recovery ---
     const float ATTACK_COST = 22.5f;
+    
+    // Mouse Left: Ataque Leve (Combo)
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (player->attackState == 3) {
             // try to chain combo during recovery
@@ -162,17 +176,22 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->hasHitEnemy = false;
                 PlayerUseStamina(player, ATTACK_COST);
             }
-        } else if (player->attackState == 0) {
+        } else if (player->attackState == 0 && !player->isDashing && player->stamina >= ATTACK_COST) {
             // start new combo
-            if (!player->isDashing && player->stamina >= ATTACK_COST) {
-                player->comboStep = 1;
-                player->attackState = 1; // windup
-                player->attackStateTimer = 0.0f;
-                player->hasHitEnemy = false;
-                PlayerUseStamina(player, ATTACK_COST);
-            }
+            player->comboStep = 1;
+            player->attackState = 1; // windup
+            player->attackStateTimer = 0.0f;
+            player->hasHitEnemy = false;
+            PlayerUseStamina(player, ATTACK_COST);
         }
-
+    }
+    
+    // Mouse Right: Parry (Aparar)
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+        if (player->attackState == 0 && !player->isDashing && !player->isHealing && !player->isParrying) {
+            player->isParrying = true;
+            player->parryTimer = player->parryDuration;
+        }
     }
 
     if (player->isHealing) {
@@ -258,8 +277,8 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         // third-hit lunge during active
         velX = player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
         velY = player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
-    } else if (player->attackState == 1 || player->attackState == 2) {
-        // locked during windup/active (except third active lunge handled above)
+    } else if (player->attackState == 1 || player->attackState == 2 || player->isParrying) {
+        // locked during windup/active/parry (except third active lunge handled above)
         velX = 0;
         velY = 0;
     } else {
@@ -288,6 +307,9 @@ void DrawPlayer(Player player) {
 
     DrawCircleV(player.pos, player.raio, playerOuterColor);
     DrawCircleGradient(player.pos, player.raio * 0.65f, ORANGE, playerOuterColor);
+    if (player.isParrying) {
+        DrawCircleLines((int)player.pos.x, (int)player.pos.y, player.raio * 1.5f, BLUE);
+    }
     if (player.isHitboxActive) {
         DrawCircleLines((int)player.hitboxCenter.x, (int)player.hitboxCenter.y, player.hitboxRadius, RED);
     }
@@ -295,6 +317,10 @@ void DrawPlayer(Player player) {
 
 // HUD - Funções de Vida e Estamina
 void PlayerTakeDamage(Player *player, int damage) {
+    // Dano normal: pode ser bloqueado por parry
+    if (player->isParrying) {
+        return; // Parry bem-sucedido, sem dano
+    }
     if (player->isDashing) return;
 
     player->hp -= damage;
@@ -304,6 +330,24 @@ void PlayerTakeDamage(Player *player, int damage) {
         // cancelar ações
         player->isDashing = false;
         player->isHitboxActive = false;
+        player->isParrying = false;
+    }
+}
+
+void PlayerTakeDamage_IgnoreParry(Player *player, int damage) {
+    // Dano ignorando parry: para projéteis e AoE
+    if (player->isDashing) return;
+
+    player->isParrying = false; // Interrompe parry
+
+    player->hp -= damage;
+    if (player->hp < 0) player->hp = 0;
+    if (player->hp == 0) {
+        player->alive = false;
+        // cancelar ações
+        player->isDashing = false;
+        player->isHitboxActive = false;
+        player->isParrying = false;
     }
 }
 
