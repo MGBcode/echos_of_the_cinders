@@ -27,16 +27,6 @@ static void ProjectileNode_AddToList(ProjectileNode **head, ProjectileNode *node
     *head = node;
 }
 
-static void ProjectileNode_FreeList(ProjectileNode **head) {
-    ProjectileNode *current = *head;
-    while (current != NULL) {
-        ProjectileNode *temp = current;
-        current = current->next;
-        free(temp);
-    }
-    *head = NULL;
-}
-
 static Vector2 SafeNormalize(Vector2 v) {
     float len = Vector2Length(v);
     if (len < 0.0001f) return (Vector2){1.0f, 0.0f};
@@ -289,30 +279,31 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
         ProjectileNode **current = &b->projectilesHead;
         while (*current != NULL) {
             ProjectileNode *proj = *current;
-            
-            // Atualizar posição
-            proj->pos.x += proj->dir.x * proj->speed * dt;
-            proj->pos.y += proj->dir.y * proj->speed * dt;
-            
+
+            Vector2 toPlayer = Vector2Subtract(playerPos, proj->pos);
+            Vector2 targetDir = (Vector2Length(toPlayer) > 0.0001f)
+                ? Vector2Normalize(toPlayer)
+                : proj->dir;
+
+            proj->dir = Vector2Normalize(Vector2Lerp(proj->dir, targetDir, 2.5f * dt));
+            proj->pos = Vector2Add(proj->pos, Vector2Scale(proj->dir, proj->speed * dt));
+
             // Verificar colisão com player
             if (CheckCollisionCircles(proj->pos, proj->radius, playerPos, playerRadius)) {
-                // Aplicar dano
                 printf("[HIT] Projectile acertou o player: %d HP\\n", proj->damage);
-                // Remover da lista
+                PlayerTakeDamage(player, proj->damage);
                 *current = proj->next;
                 free(proj);
                 continue;
             }
-            
+
             // Verificar se saiu da tela/colisão com cenário
             if (!CanMoveCircle(level, proj->pos.x, proj->pos.y, proj->radius)) {
-                // Remover da lista
                 *current = proj->next;
                 free(proj);
                 continue;
             }
-            
-            // Mover para o próximo nó
+
             current = &proj->next;
         }
     }
@@ -457,15 +448,14 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                             Vector2 advance = Vector2Scale(b->attackDir, 220.0f * dt);
                             MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
                         }
-                        if (!b->hasHitPlayerThisAttack) {
-                            b->atk.active = true;
-                            b->atk.damage = currentDamage;
-                            b->atk.radius = b->lightHitRadius;
-                            b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
-                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
-                                b->hasHitPlayerThisAttack = true;
-                                printf("[HIT] Leve acertou o player: %d HP\n", currentDamage);
-                            }
+                        b->atk.active = true;
+                        b->atk.damage = currentDamage;
+                        b->atk.radius = b->lightHitRadius;
+                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->lightForwardOffset));
+                        if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                            b->hasHitPlayerThisAttack = true;
+                            PlayerTakeDamage(player, b->atk.damage);
+                            printf("[HIT] Leve acertou o player: %d HP\n", currentDamage);
                         }
                     } else {
                         b->atk.active = false;
@@ -506,15 +496,14 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                             Vector2 advance = Vector2Scale(b->attackDir, 220.0f * dt);
                             MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
                         }
-                        if (!b->hasHitPlayerThisAttack) {
-                            b->atk.active = true;
-                            b->atk.damage = currentDamage;
-                            b->atk.radius = b->heavyHitRadius;
-                            b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
-                            if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
-                                b->hasHitPlayerThisAttack = true;
-                                printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
-                            }
+                        b->atk.active = true;
+                        b->atk.damage = currentDamage;
+                        b->atk.radius = b->heavyHitRadius;
+                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
+                        if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                            b->hasHitPlayerThisAttack = true;
+                            PlayerTakeDamage(player, b->atk.damage);
+                            printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
                         }
                     } else {
                         if (localT >= activeEnd) b->hasHitPlayerThisAttack = false;
@@ -534,14 +523,14 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                         b->atk.active = true;
                         b->atk.damage = b->brutalDamage;
                         b->atk.radius = b->brutalHitRadius;
-                        b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + b->brutalHitRadius * 0.6f));
+                        b->atk.center = b->pos;
                     } else {
                         b->atk.active = false;
                     }
                     if (b->atk.active && !b->hasHitPlayerThisAttack) {
-                        b->atk.center = b->pos;
                         if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
+                            PlayerTakeDamage(player, b->atk.damage);
                             printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);
                         }
                     }
@@ -564,8 +553,8 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                                 b->projBurstShot += 1;
                                 b->projBurstTimer = b->projBurstInterval;
                                 
-                                float projRadius = 22.0f * b->sizeScale * ((b->phase == 2) ? 1.15f : 1.0f);
-                                float projSpeed = 640.0f * ((b->phase == 2) ? 1.55f : 1.0f);
+                                float projRadius = 11.0f * b->sizeScale * ((b->phase == 2) ? 1.15f : 1.0f);
+                                float projSpeed = 320.0f * ((b->phase == 2) ? 1.55f : 1.0f);
                                 Vector2 projPos = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->raio + projRadius + 4.0f));
                                 
                                 ProjectileNode *newProj = ProjectileNode_Create(
@@ -600,6 +589,7 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                     if (b->atk.active && !b->hasHitPlayerThisAttack) {
                         if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
+                            PlayerTakeDamage(player, b->atk.damage);
                             printf("[HIT] AoE Burst acertou o player: %d HP\n", b->aoeDamage);
                         }
                     }
@@ -608,7 +598,14 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
                 default: break;
             }
 
-            if (b->attackType != BOSS_ATTACK_TYPE_BRUTAL) {
+            if (b->attackType == BOSS_ATTACK_TYPE_PROJECTILE) {
+                // Após projétil, forçar caça (anti-spam à distância)
+                if (b->stateTimer >= totalEnd) {
+                    b->atk.active = false;
+                    b->state = BOSS_HUNT;
+                    b->stateTimer = 0.0f;
+                }
+            } else if (b->attackType != BOSS_ATTACK_TYPE_BRUTAL) {
                 if (b->stateTimer >= totalEnd) {
                     b->atk.active = false;
                     b->state = BOSS_COOLDOWN;

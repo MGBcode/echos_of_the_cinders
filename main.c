@@ -60,9 +60,6 @@ int main(void) {
     // Anti-multi-hit: aplica dano 1x por ativação da hitbox
     bool lastHitboxActive = false;
     
-    // Anti-multi-hit: aplica dano 1x por ativação do ataque do boss
-    bool lastBossAttackActive = false;
-
     // Pausa do jogo
     bool isPaused = false;
     bool lastCKeyPressed = false;
@@ -133,19 +130,6 @@ int main(void) {
             }
 
             lastHitboxActive = hitboxActiveNow;
-
-            // Dano no player por ataque do boss
-            AttackCircle bossAttack;
-            bool bossAttackActive = Boss_GetAttackCircle(&boss, &bossAttack);
-            
-            if (bossAttackActive && !lastBossAttackActive && cavaleiro.hp > 0) {
-                if (CheckCollisionCircles(bossAttack.center, bossAttack.radius,
-                                          cavaleiro.pos, cavaleiro.raio)) {
-                    PlayerTakeDamage(&cavaleiro, bossAttack.damage);
-                }
-            }
-            
-            lastBossAttackActive = bossAttackActive;
         }
 
         BeginDrawing();
