@@ -1,4 +1,5 @@
 #include "enemy.h"
+#include "player.h"
 #include "raymath.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -214,6 +215,7 @@ static BossAttackType ChooseAttack(Boss *b, BossAttackType attackType, BossAttac
 static BossAttackType SelectAttackByDistance(Boss *b, float dist) {
     float shortRange = b->attackRange * 0.65f;
     float midRange = b->attackRange * 0.90f;
+    bool allowProjectile = (b->phase == 2 && dist > 350.0f);
     int roll = rand() % 100;
 
     if (dist <= shortRange) {
@@ -225,12 +227,14 @@ static BossAttackType SelectAttackByDistance(Boss *b, float dist) {
     if (dist <= midRange) {
         if (roll < 55) return BOSS_ATTACK_TYPE_BRUTAL;
         if (roll < 85) return BOSS_ATTACK_TYPE_HEAVY;
-        return (b->phase == 2) ? BOSS_ATTACK_TYPE_PROJECTILE : BOSS_ATTACK_TYPE_BRUTAL;
+        return allowProjectile ? BOSS_ATTACK_TYPE_PROJECTILE : BOSS_ATTACK_TYPE_BRUTAL;
     }
 
     // Long distance, only attack if player entrou no alcance justo ou phase 2 projectile punishes
     if (b->phase == 2) {
-        if (roll < 70) return BOSS_ATTACK_TYPE_PROJECTILE;
+        if (allowProjectile) {
+            if (roll < 70) return BOSS_ATTACK_TYPE_PROJECTILE;
+        }
         return BOSS_ATTACK_TYPE_BRUTAL;
     }
     return BOSS_ATTACK_TYPE_BRUTAL;
@@ -261,8 +265,11 @@ static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
     b->projBurstTimer = 0.0f;
 }
 
-void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level *level) {
+void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
     if (b->hp <= 0) return;
+
+    Vector2 playerPos = player->pos;
+    float playerRadius = player->raio;
 
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
@@ -340,6 +347,15 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                 move = Vector2Scale(lateral, observeSpeed * 0.55f * dt);
             }
             MoveWithCollision(level, &b->pos, b->raio * 1.1f, move);
+
+            if (dist > 350.0f) {
+                if (b->phase == 2 && Boss_CanUseProjectile(b)) {
+                    StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
+                } else {
+                    EnterHunt(b);
+                }
+                return;
+            }
 
             if (b->phase == 2 && dist > b->pursuitDistance + 96.0f) {
                 StartAttack(b, BOSS_ATTACK_TYPE_PROJECTILE, playerPos);
@@ -523,6 +539,7 @@ void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level
                         b->atk.active = false;
                     }
                     if (b->atk.active && !b->hasHitPlayerThisAttack) {
+                        b->atk.center = b->pos;
                         if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                             b->hasHitPlayerThisAttack = true;
                             printf("[HIT] Brutal acertou o player: %d HP\n", b->brutalDamage);

@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include <stdbool.h>
+#include "player.h"
 #include "level.h"
 
 typedef enum {
@@ -134,7 +135,7 @@ typedef struct {
 } Boss;
 
 void Boss_Init(Boss *b, Vector2 startPos);
-void Boss_Update(Boss *b, float dt, Vector2 playerPos, float playerRadius, Level *level);
+void Boss_Update(Boss *b, float dt, Player *player, Level *level);
 void Boss_Draw(const Boss *b);
 
 // retorna true se a hitbox do boss está ativa

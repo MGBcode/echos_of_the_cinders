@@ -98,10 +98,10 @@ int main(void) {
         // Só atualiza o jogo se não estiver pausado
         if (!isPaused) {
             UpdatePlayer(&cavaleiro, deltaTime, &level);
-            Boss_Update(&boss, deltaTime, cavaleiro.pos, cavaleiro.raio, &level);
+            Boss_Update(&boss, deltaTime, &cavaleiro, &level);
 
             // Colisão sólida entre Player e Boss
-            {
+            if (cavaleiro.hp > 0 && boss.hp > 0) {
                 float dx = cavaleiro.pos.x - boss.pos.x;
                 float dy = cavaleiro.pos.y - boss.pos.y;
                 float dist = sqrtf(dx * dx + dy * dy);
