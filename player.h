@@ -21,8 +21,7 @@ typedef struct {
     int lastVerticalInput;
     float diagonalBufferTimer;
     int comboStep;
-    // Attack state machine (windup -> active -> recovery)
-    int attackState; // 0 = none, 1 = windup, 2 = active, 3 = recovery
+    int attackState;
     float attackStateTimer;
     float attackWindup[3];
     float attackActive[3];
@@ -39,7 +38,6 @@ typedef struct {
     int frascosAtuais;
     bool isHealing;
     float healingTimer;
-    // HUD - Vida e Estamina
     int hp;
     int hpMax;
     float stamina;
@@ -47,17 +45,15 @@ typedef struct {
     float staminaRecoveryDelay;
     float staminaRecoveryDelayCounter;
     float staminaRecoveryRate;
-    // Estado de vida
     bool alive;
 } Player;
 
-void InitPlayer(Player *player, int screenWidth, int screenHeight);
+void InitPlayer(Player *player, float tileX, float tileY, Level *level);
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level);
 
 void DrawPlayer(Player player);
 
-// Funções de HUD - Vida e Estamina
 void PlayerTakeDamage(Player *player, int damage);
 void PlayerTakeDamage_IgnoreParry(Player *player, int damage);
 void PlayerUseStamina(Player *player, float amount);

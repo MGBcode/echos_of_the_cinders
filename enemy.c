@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// ============================================
+// Helper Functions - Utilities & Math
+// ============================================
 static float RandRange(float a, float b) {
     float t = (float)rand() / (float)RAND_MAX;
     return a + (b - a) * t;
@@ -33,6 +36,9 @@ static Vector2 SafeNormalize(Vector2 v) {
     return Vector2Scale(v, 1.0f / len);
 }
 
+// ============================================
+// Helper Functions - Boss Phase & Mechanics
+// ============================================
 static bool Boss_CanUseProjectile(const Boss *b) {
     return b->hp <= (b->hpMax / 2);
 }
@@ -42,12 +48,14 @@ static float GetPhaseWindup(const Boss *b, float baseWindup) {
 }
 
 static float GetAttackCooldown(const Boss *b, float baseCooldown) {
-    float cooldown = baseCooldown * 0.85f; // agressividade geral
-    if (b->phase == 2) cooldown *= 0.85f;   // fase 2 reduz ainda mais a punição
+    float cooldown = baseCooldown * 0.85f;
+    if (b->phase == 2) cooldown *= 0.85f;
     return cooldown;
 }
 
-// Colisão em tiles (igual ao player, mas para o boss)
+// ============================================
+// Helper Functions - Collision & Movement
+// ============================================
 static bool CanMoveCircle(Level *level, float x, float y, float r) {
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
@@ -63,7 +71,6 @@ static bool CanMoveCircle(Level *level, float x, float y, float r) {
            level_pode_mover(level, right, bottom);
 }
 
-// Move com colisão separando X e Y
 static void MoveWithCollision(Level *level, Vector2 *pos, float r, Vector2 delta) {
     float nx = pos->x + delta.x;
     float ny = pos->y + delta.y;
@@ -76,13 +83,67 @@ static void MoveWithCollision(Level *level, Vector2 *pos, float r, Vector2 delta
     }
 }
 
+// ============================================
+// Training Dummy System
+// ============================================
+void TrainingDummy_Init(TrainingDummy *dummy, float tileX, float tileY, Level *level) {
+    dummy->tile_pos.x = tileX;
+    dummy->tile_pos.y = tileY;
+    dummy->pos.x = tileX * level->tamanho_tile;
+    dummy->pos.y = tileY * level->tamanho_tile_h;
+    dummy->raio = 20.0f;
+    dummy->hpMax = 50;
+    dummy->hp = dummy->hpMax;
+    dummy->alive = true;
+    dummy->hitFlashTimer = 0.0f;
+}
+
+void TrainingDummy_Update(TrainingDummy *dummy, float deltaTime) {
+    if (dummy->hitFlashTimer > 0.0f) {
+        dummy->hitFlashTimer -= deltaTime;
+    }
+}
+
+void TrainingDummy_Draw(const TrainingDummy *dummy) {
+    if (!dummy->alive) return;
+    
+    Color dummyColor = WHITE;
+    if (dummy->hitFlashTimer > 0.0f) {
+        dummyColor = RED;
+    }
+    
+    DrawCircle((int)dummy->pos.x, (int)dummy->pos.y, dummy->raio, dummyColor);
+    DrawCircleLines((int)dummy->pos.x, (int)dummy->pos.y, dummy->raio, DARKGRAY);
+    
+    // Draw HP bar above dummy
+    int barW = 40;
+    int barH = 6;
+    int barX = (int)dummy->pos.x - barW/2;
+    int barY = (int)dummy->pos.y - (int)dummy->raio - 15;
+    
+    DrawRectangle(barX, barY, barW, barH, (Color){40,40,40,200});
+    DrawRectangleLines(barX, barY, barW, barH, GRAY);
+    
+    float hpRatio = (float)dummy->hp / (float)dummy->hpMax;
+    if (hpRatio < 0.0f) hpRatio = 0.0f;
+    int fillW = (int)(barW * hpRatio);
+    
+    Color barColor = (hpRatio > 0.5f) ? GREEN : (hpRatio > 0.25f) ? ORANGE : RED;
+    DrawRectangle(barX + 1, barY + 1, fillW - 2 > 0 ? fillW - 2 : 0, barH - 2, barColor);
+}
+
+// ============================================
+// Boss Attack System
+// ============================================
 bool Boss_GetAttackCircle(const Boss *b, AttackCircle *out) {
     if (!b->atk.active) return false;
     if (out) *out = b->atk;
     return true;
 }
 
-// -------------------- boss logic --------------------
+// ============================================
+// Boss Initialization
+// ============================================
 void Boss_Init(Boss *b, Vector2 startPos) {
     b->pos = startPos;
     b->sizeScale = 2.5f;
@@ -167,6 +228,9 @@ void Boss_Init(Boss *b, Vector2 startPos) {
     b->projBurstInterval = 0.30f;
 }
 
+// ============================================
+// Boss State Management
+// ============================================
 static void EnterObserve(Boss *b) {
     b->state = BOSS_OBSERVE;
     b->stateTimer = RandRange(1.0f, 1.6f);
@@ -181,6 +245,9 @@ static void EnterHunt(Boss *b) {
     b->atk.active = false;
 }
 
+// ============================================
+// Boss Attack Selection Strategy
+// ============================================
 static BossAttackType ChooseAttack(Boss *b, BossAttackType attackType, BossAttackType alternateType) {
     if (!Boss_CanUseProjectile(b)) {
         if (attackType == BOSS_ATTACK_TYPE_PROJECTILE) attackType = BOSS_ATTACK_TYPE_BRUTAL;
@@ -230,6 +297,9 @@ static BossAttackType SelectAttackByDistance(Boss *b, float dist) {
     return BOSS_ATTACK_TYPE_BRUTAL;
 }
 
+// ============================================
+// Boss Attack Initiation
+// ============================================
 static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
     if (!Boss_CanUseProjectile(b) && attackType == BOSS_ATTACK_TYPE_PROJECTILE) {
         attackType = BOSS_ATTACK_TYPE_BRUTAL;
@@ -255,6 +325,9 @@ static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
     b->projBurstTimer = 0.0f;
 }
 
+// ============================================
+// Boss Main Update Loop
+// ============================================
 void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
     if (b->hp <= 0) return;
 
@@ -652,6 +725,9 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
     }
 }
 
+// ============================================
+// Boss Drawing
+// ============================================
 void Boss_Draw(const Boss *b) {
     if (b->hp <= 0) {
         DrawText("BOSS DEAD", GetScreenWidth() - 140, 20, 20, RED);

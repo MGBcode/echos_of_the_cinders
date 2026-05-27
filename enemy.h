@@ -134,11 +134,25 @@ typedef struct {
     float projBurstInterval;
 } Boss;
 
+typedef struct {
+    Vector2 pos;
+    Vector2 tile_pos;
+    float raio;
+    int hp;
+    int hpMax;
+    bool alive;
+    float hitFlashTimer;
+} TrainingDummy;
+
 void Boss_Init(Boss *b, Vector2 startPos);
 void Boss_Update(Boss *b, float dt, Player *player, Level *level);
 void Boss_Draw(const Boss *b);
 
 // retorna true se a hitbox do boss está ativa
 bool Boss_GetAttackCircle(const Boss *b, AttackCircle *out);
+
+void TrainingDummy_Init(TrainingDummy *dummy, float tileX, float tileY, Level *level);
+void TrainingDummy_Update(TrainingDummy *dummy, float deltaTime);
+void TrainingDummy_Draw(const TrainingDummy *dummy);
 
 #endif

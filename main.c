@@ -2,103 +2,328 @@
 #include "player.h"
 #include "level.h"
 #include "enemy.h"
+#include "menu.h"
+#include "timer.h"
+#include "config.h"
+
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 
-// HUD do boss (barra larga no centro inferior)
 static void DrawBossHUD(const Boss *boss) {
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
 
-    // Barra larga ocupando ~60% da largura da tela
     int barW = (int)(screenW * 0.6f);
     int barH = 20;
     int barX = (screenW - barW) / 2;
     int barY = screenH - 60;
 
-    // Texto centralizado acima da barra
     char txt[64];
     snprintf(txt, sizeof(txt), "BOSS HP: %d/%d", boss->hp, boss->hpMax);
+
     int textW = MeasureText(txt, 20);
-    DrawText(txt, (screenW - textW) / 2, barY - 26, 20, LIGHTGRAY);
 
-    // fundo
-    DrawRectangle(barX, barY, barW, barH, (Color){ 40, 40, 40, 220 });
-    DrawRectangleLines(barX, barY, barW, barH, (Color){ 110, 110, 110, 255 });
+    DrawText(txt,
+             (screenW - textW) / 2,
+             barY - 26,
+             20,
+             LIGHTGRAY);
 
-    float ratio = 0.0f;
-    if (boss->hpMax > 0) ratio = (float)boss->hp / (float)boss->hpMax;
+    DrawRectangle(barX, barY, barW, barH,
+                  (Color){40,40,40,220});
+
+    DrawRectangleLines(barX, barY, barW, barH,
+                       (Color){110,110,110,255});
+
+    float ratio = (float)boss->hp / (float)boss->hpMax;
+
     if (ratio < 0.0f) ratio = 0.0f;
     if (ratio > 1.0f) ratio = 1.0f;
 
     int fillW = (int)(barW * ratio);
-    Color fill = (ratio > 0.5f) ? GREEN : (ratio > 0.25f ? ORANGE : RED);
-    DrawRectangle(barX + 1, barY + 1, fillW - 2 > 0 ? fillW - 2 : 0, barH - 2, fill);
+
+    Color fill =
+        (ratio > 0.5f) ? GREEN :
+        (ratio > 0.25f) ? ORANGE :
+        RED;
+
+    DrawRectangle(barX + 1,
+                  barY + 1,
+                  fillW - 2 > 0 ? fillW - 2 : 0,
+                  barH - 2,
+                  fill);
+}
+
+static void ResetJogo(Player *cavaleiro,
+                      Boss *boss,
+                      Level *level,
+                      TrainingDummy *dummy)
+{
+    level_carregar_sala(level, SALA_TREINO);
+    level_atualizar_tile(level);
+
+    InitPlayer(cavaleiro,
+               2.5f,
+               ALTURA_MAPA / 2.0f,
+               level);
+    
+    TrainingDummy_Init(dummy,
+                       LARGURA_MAPA / 2.0f,
+                       ALTURA_MAPA / 2.0f,
+                       level);
 }
 
 int main(void) {
-    // Ativa VSync para evitar que o FPS suba para 2000 e frite o CPU
+
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
 
     InitWindow(800, 600, "Echos of the Cinders");
 
-    Player cavaleiro;
-    InitPlayer(&cavaleiro, GetScreenWidth(), GetScreenHeight());
-
-    Level level;
-    level_iniciar(&level);
-
-    Boss boss;
-    Boss_Init(&boss, (Vector2){ 600, 300 });
+    SetExitKey(KEY_NULL);
 
     SetTargetFPS(60);
 
-    // Variáveis para detectar mudança de resolução
-    int lastScreenWidth = GetScreenWidth();
+    Player cavaleiro;
+    Level level;
+    Boss boss;
+    TrainingDummy dummy;
+
+    level_iniciar(&level);
+
+    ResetJogo(&cavaleiro,
+              &boss,
+              &level,
+              &dummy);
+
+    TimerData timer;
+
+    Timer_Reset(&timer);
+
+    GameState gameState = STATE_MENU;
+
+    bool bossJaMorreu = false;
+
+    int lastScreenWidth  = GetScreenWidth();
     int lastScreenHeight = GetScreenHeight();
 
-    // Anti-multi-hit: aplica dano 1x por ativação da hitbox
     bool lastHitboxActive = false;
-    
-    // Pausa do jogo
+    bool lastBossAttackActive = false;
+
     bool isPaused = false;
     bool lastCKeyPressed = false;
 
-    while (!WindowShouldClose()) {
-        float deltaTime = GetFrameTime();
+    char iniciais[4] = "";
+    int letrasDigitadas = 0;
 
-        // Detectar pausa com tecla C
+    while (!WindowShouldClose()) {
+
+        float dt = GetFrameTime();
         bool currentCKeyPressed = IsKeyPressed(KEY_C);
         if (currentCKeyPressed && !lastCKeyPressed) {
             isPaused = !isPaused;
         }
         lastCKeyPressed = currentCKeyPressed;
 
-        // SÓ atualiza os cálculos do mapa se a janela mudar de tamanho
-        if (IsWindowResized() || GetScreenWidth() != lastScreenWidth) {
-            float scaleX = (float)GetScreenWidth() / lastScreenWidth;
-            float scaleY = (float)GetScreenHeight() / lastScreenHeight;
+        if ((gameState == STATE_TREINO ||
+             gameState == STATE_BOSS) &&
 
-            // Ajusta a posição do jogador proporcionalmente
-            cavaleiro.pos.x *= scaleX;
-            cavaleiro.pos.y *= scaleY;
-            boss.pos.x *= scaleX;
-            boss.pos.y *= scaleY;
-
-            // Atualiza as métricas do mapa e do player
+            (IsWindowResized() ||
+             GetScreenWidth() != lastScreenWidth))
+        {
             level_atualizar_tile(&level);
+
+            cavaleiro.pos.x = cavaleiro.tile_pos.x * level.tamanho_tile;
+            cavaleiro.pos.y = cavaleiro.tile_pos.y * level.tamanho_tile_h;
+            
+            boss.pos.x = (boss.pos.x / lastScreenWidth) * GetScreenWidth();
+            boss.pos.y = (boss.pos.y / lastScreenHeight) * GetScreenHeight();
 
             lastScreenWidth = GetScreenWidth();
             lastScreenHeight = GetScreenHeight();
         }
 
-        // Só atualiza o jogo se não estiver pausado
-        if (!isPaused) {
-            UpdatePlayer(&cavaleiro, deltaTime, &level);
-            Boss_Update(&boss, deltaTime, &cavaleiro, &level);
+        switch (gameState) {
 
-            // Colisão sólida entre Player e Boss
-            if (cavaleiro.hp > 0 && boss.hp > 0) {
+        case STATE_MENU: {
+
+            BeginDrawing();
+
+            MenuOpcao opcao =
+                Menu_DrawPrincipal();
+
+            EndDrawing();
+
+            if (opcao == MENU_OPCAO_JOGAR) {
+
+                ResetJogo(&cavaleiro,
+                          &boss,
+                          &level,
+                          &dummy);
+
+                level_atualizar_tile(&level);
+
+                Timer_Reset(&timer);
+
+                bossJaMorreu = false;
+
+                lastHitboxActive = false;
+                lastBossAttackActive = false;
+
+                gameState = STATE_TREINO;
+            }
+
+            else if (opcao ==
+                     MENU_OPCAO_RECORDES)
+            {
+                gameState = STATE_RECORDES;
+            }
+
+        } break;
+
+        case STATE_RECORDES: {
+
+            BeginDrawing();
+
+            Menu_DrawRecordes();
+
+            EndDrawing();
+
+            if (IsKeyPressed(KEY_ESCAPE) ||
+                IsKeyPressed(KEY_ENTER))
+            {
+                gameState = STATE_MENU;
+            }
+
+        } break;
+
+        case STATE_TREINO: {
+
+            UpdatePlayer(&cavaleiro,
+                         dt,
+                         &level);
+            
+            TrainingDummy_Update(&dummy, dt);
+
+            bool hitNow =
+                cavaleiro.isHitboxActive;
+
+            if (hitNow &&
+                !lastHitboxActive)
+            {
+                // Combat handling will be added here
+            }
+
+            lastHitboxActive = hitNow;
+
+            TipeTile tileAtual =
+                level_get_tile(&level,
+                               cavaleiro.pos.x,
+                               cavaleiro.pos.y);
+
+            // Collision with training dummy
+            if (dummy.alive && cavaleiro.isHitboxActive) {
+                if (CheckCollisionCircles(cavaleiro.hitboxCenter,
+                                         cavaleiro.hitboxRadius,
+                                         dummy.pos,
+                                         dummy.raio)) {
+                    dummy.hp -= 10;
+                    if (dummy.hp <= 0) {
+                        dummy.hp = 0;
+                        dummy.alive = false;
+                    }
+                    dummy.hitFlashTimer = 0.1f;
+                }
+            }
+
+            if (tileAtual == TILE_PORTA) {
+                float doorTileX = LARGURA_MAPA - 1.5f;
+                float doorTileY = ALTURA_MAPA / 2.0f;
+                float doorX = doorTileX * level.tamanho_tile;
+                float doorY = doorTileY * level.tamanho_tile_h;
+                
+                float distToDoor = sqrtf(
+                    (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
+                    (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
+                );
+                
+                float doorRadius = level.tamanho_tile * 1.2f;
+                
+                if (distToDoor < doorRadius) {
+
+                    level_carregar_sala(&level,
+                                        SALA_BOSS);
+
+                    level_atualizar_tile(&level);
+
+                    cavaleiro.tile_pos.x = 2.5f;
+                    cavaleiro.tile_pos.y = ALTURA_MAPA / 2.0f + 0.5f;
+                    cavaleiro.pos.x =
+                        level.tamanho_tile * cavaleiro.tile_pos.x;
+
+                    cavaleiro.pos.y =
+                        level.tamanho_tile_h * cavaleiro.tile_pos.y;
+
+                    Boss_Init(&boss,
+                        (Vector2){
+                            level.tamanho_tile *
+                            (LARGURA_MAPA * 3 / 4),
+
+                            level.tamanho_tile_h *
+                            (ALTURA_MAPA / 2)
+                        });
+
+                    Timer_Start(&timer);
+
+                    bossJaMorreu = false;
+
+                    gameState = STATE_BOSS;
+
+                    break;
+                }
+            }
+
+            BeginDrawing();
+
+            ClearBackground(BLACK);
+
+            level_desenhar(&level);
+
+            DrawPlayer(cavaleiro);
+            TrainingDummy_Draw(&dummy);
+
+            DrawPlayerHUD(&cavaleiro,
+                          10,
+                          10);
+
+            DrawText("SALA DE TREINO",
+                     10,
+                     110,
+                     18,
+                     DARKGRAY);
+            
+            // FPS Display
+            char fpsTxt[32];
+            snprintf(fpsTxt, sizeof(fpsTxt), "FPS: %d", GetFPS());
+            DrawText(fpsTxt, 10, GetScreenHeight() - 30, 14, DARKGREEN);
+
+            EndDrawing();
+
+        } break;
+
+        case STATE_BOSS: {
+
+            Timer_Update(&timer, dt);
+            if (!isPaused) {
+                UpdatePlayer(&cavaleiro,
+                             dt,
+                             &level);
+
+                Boss_Update(&boss,
+                            dt,
+                            &cavaleiro,
+                            &level);
+
                 float dx = cavaleiro.pos.x - boss.pos.x;
                 float dy = cavaleiro.pos.y - boss.pos.y;
                 float dist = sqrtf(dx * dx + dy * dy);
@@ -112,50 +337,160 @@ int main(void) {
                         cavaleiro.pos.x += minDist;
                     }
                 }
+
+                if (!cavaleiro.alive) {
+
+                    Timer_Reset(&timer);
+
+                    gameState = STATE_DERROTA;
+
+                    break;
+                }
+
+                if (!bossJaMorreu &&
+                    boss.hp <= 0)
+                {
+                    bossJaMorreu = true;
+
+                    level_abrir_saida_boss(&level);
+                }
+
+                bool hitNow =
+                    cavaleiro.isHitboxActive;
+
+                
+                if (hitNow &&
+                    !lastHitboxActive &&
+                    boss.hp > 0)
+                {
+                    if (CheckCollisionCircles(
+                            cavaleiro.hitboxCenter,
+                            cavaleiro.hitboxRadius,
+                            boss.pos,
+                            boss.raio))
+                    {
+                        boss.hp -= 10;
+
+                        if (boss.hp < 0)
+                            boss.hp = 0;
+                    }
+                }
+
+                lastHitboxActive = hitNow;
+
+                AttackCircle bossAtk;
+                bool bossAtkActive =
+                    Boss_GetAttackCircle(
+                        &boss,
+                        &bossAtk);
+
+                if (bossAtkActive &&
+                    !lastBossAttackActive &&
+                    cavaleiro.hp > 0)
+                {
+                    if (CheckCollisionCircles(
+                            bossAtk.center,
+                            bossAtk.radius,
+                            cavaleiro.pos,
+                            cavaleiro.raio))
+                    {
+                        PlayerTakeDamage(
+                            &cavaleiro,
+                            bossAtk.damage);
+                    }
+                }
+
+                lastBossAttackActive =
+                    bossAtkActive;
             }
 
-            // Dano no boss por colisão com hitbox do player (sem mexer no player)
-            // Observação: aqui o dano é fixo só para validar HUD/feedback.
-            const int PLAYER_DEBUG_DAMAGE = 10;
+            if (bossJaMorreu) {
 
-            bool hitboxActiveNow = cavaleiro.isHitboxActive;
+                TipeTile tileAtual =
+                    level_get_tile(
+                        &level,
+                        cavaleiro.pos.x,
+                        cavaleiro.pos.y);
 
-            // Só tenta dar hit quando a hitbox "acabou de ativar"
-            if (hitboxActiveNow && !lastHitboxActive && boss.hp > 0) {
-                if (CheckCollisionCircles(cavaleiro.hitboxCenter, cavaleiro.hitboxRadius,
-                                          boss.pos, boss.raio)) {
-                    boss.hp -= PLAYER_DEBUG_DAMAGE;
-                    if (boss.hp < 0) boss.hp = 0;
+                if (tileAtual == TILE_PORTA) {
+                    float doorTileX = LARGURA_MAPA - 1.5f;
+                    float doorTileY = ALTURA_MAPA / 2.0f;
+                    float doorX = doorTileX * level.tamanho_tile;
+                    float doorY = doorTileY * level.tamanho_tile_h;
+                    
+                    float distToDoor = sqrtf(
+                        (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
+                        (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
+                    );
+                    
+                    float doorRadius = level.tamanho_tile * 1.2f;
+                    
+                    if (distToDoor < doorRadius) {
+
+                        Timer_Stop(&timer);
+
+                        letrasDigitadas = 0;
+
+                        memset(iniciais, 0,
+                               sizeof(iniciais));
+
+                        gameState =
+                            STATE_SALVAR_TEMPO;
+
+                        break;
+                    }
                 }
             }
 
-            lastHitboxActive = hitboxActiveNow;
-        }
+            BeginDrawing();
 
-        BeginDrawing();
             ClearBackground(BLACK);
+
             level_desenhar(&level);
+
             DrawPlayer(cavaleiro);
+
             Boss_Draw(&boss);
 
-            // HUD do player (canto superior esquerdo)
-            DrawPlayerHUD(&cavaleiro, 10, 10);
-
-            // FPS (canto superior direito)
-            DrawFPS(GetScreenWidth() - 80, 10);
-
-            // Texto de ajuda - abaixo do HUD do player
+            DrawPlayerHUD(&cavaleiro,
+                          10,
+                          10);
             DrawText("Alt+Enter para Fullscreen", 10, 110, 20, GRAY);
             DrawText("C para Pausar/Resumir", 10, 140, 20, GRAY);
-            DrawText(TextFormat("Curas: %d / %d", cavaleiro.frascosAtuais, cavaleiro.frascosMax), 10, 170, 20, LIGHTGRAY);
-            if (cavaleiro.isHealing) {
-                DrawText("Curando...", 10, 200, 20, GOLD);
-            }
-
-            // HUD do boss (centro inferior)
             DrawBossHUD(&boss);
 
-            // Tela de pausa
+            DrawTimer(&timer);
+            if (bossJaMorreu) {
+                int screenW = GetScreenWidth();
+                int screenH = GetScreenHeight();
+
+                
+                DrawRectangle(0, 0, screenW, screenH,
+                              (Color){0, 0, 0, 40});
+
+                
+                const char *victoryMsg =
+                    "BOSS DERROTADO!";
+                int victoryW =
+                    MeasureText(victoryMsg, 48);
+                DrawText(victoryMsg,
+                         (screenW - victoryW) / 2,
+                         screenH / 2 - 60,
+                         48,
+                         (Color){210, 90, 40, 255});
+
+                
+                const char *instrMsg =
+                    "Dirija-se para a SAIDA para completar!";
+                int instrW = MeasureText(instrMsg, 24);
+                DrawText(instrMsg,
+                         (screenW - instrW) / 2,
+                         screenH / 2 + 20,
+                         24,
+                         GOLD);
+            }
+
+            
             if (isPaused) {
                 int screenW = GetScreenWidth();
                 int screenH = GetScreenHeight();
@@ -164,9 +499,200 @@ int main(void) {
                 int textW = MeasureText(pauseText, 80);
                 DrawText(pauseText, (screenW - textW) / 2, screenH / 2 - 40, 80, YELLOW);
             }
-        EndDrawing();
+
+            EndDrawing();
+
+        } break;
+
+        case STATE_SALVAR_TEMPO: {
+
+            int key = GetCharPressed();
+
+            while (key > 0) {
+
+                if (key >= 'a' &&
+                    key <= 'z')
+                {
+                    key -= 32;
+                }
+
+                if (key >= 'A' &&
+                    key <= 'Z' &&
+                    letrasDigitadas < 3)
+                {
+                    iniciais[letrasDigitadas] =
+                        (char)key;
+
+                    letrasDigitadas++;
+                }
+
+                key = GetCharPressed();
+            }
+
+            if (IsKeyPressed(KEY_BACKSPACE) &&
+                letrasDigitadas > 0)
+            {
+                letrasDigitadas--;
+
+                iniciais[letrasDigitadas] = '\0';
+            }
+
+            if (letrasDigitadas == 3 &&
+                IsKeyPressed(KEY_ENTER))
+            {
+                SaveScore(iniciais,
+                          timer.currentTime);
+
+                gameState =
+                    STATE_AGRADECIMENTO;
+            }
+
+            BeginDrawing();
+
+            ClearBackground(BLACK);
+
+            DrawText("NOVO RECORDE!",
+                     240,
+                     120,
+                     40,
+                     GOLD);
+
+            
+            char tempoStr[64];
+            int minutos = (int)(timer.currentTime / 60.0f);
+            int segundos = (int)timer.currentTime % 60;
+            sprintf(tempoStr,
+                    "Tempo: %02d:%02d",
+                    minutos,
+                    segundos);
+            int tempoW = MeasureText(tempoStr, 24);
+            DrawText(tempoStr,
+                     (GetScreenWidth() - tempoW) / 2,
+                     180,
+                     24,
+                     GOLD);
+
+            DrawText("Digite 3 letras:",
+                     220,
+                     240,
+                     30,
+                     LIGHTGRAY);
+
+            
+            DrawRectangle(250,
+                          310,
+                          300,
+                          60,
+                          (Color){40, 40, 40, 255});
+            DrawRectangleLinesEx(
+                (Rectangle){250, 310, 300, 60},
+                2,
+                GOLD);
+
+            
+            int boxWidth = 80;
+            int boxHeight = 50;
+            int startX = 280;
+            int boxY = 320;
+            int spacing = 100;
+
+            for (int i = 0; i < 3; i++) {
+                
+                Color boxColor = (i < letrasDigitadas)
+                    ? (Color){100, 100, 100, 255}
+                    : (Color){50, 50, 50, 255};
+                Color textColor = (i < letrasDigitadas)
+                    ? WHITE
+                    : GRAY;
+
+                DrawRectangle(startX + i * spacing,
+                              boxY,
+                              boxWidth,
+                              boxHeight,
+                              boxColor);
+                DrawRectangleLines(startX + i * spacing,
+                                   boxY,
+                                   boxWidth,
+                                   boxHeight,
+                                   GOLD);
+
+                
+                if (i < letrasDigitadas) {
+                    char letra[2] = {iniciais[i], '\0'};
+                    int letraW = MeasureText(letra, 48);
+                    DrawText(letra,
+                             startX + i * spacing + (boxWidth - letraW) / 2,
+                             boxY + 2,
+                             48,
+                             textColor);
+                } else {
+                    DrawText("_",
+                             startX + i * spacing + (boxWidth - MeasureText("_", 40)) / 2,
+                             boxY + 8,
+                             40,
+                             GRAY);
+                }
+            }
+
+            
+            const char *instrucao =
+                (letrasDigitadas < 3)
+                ? "Digite as 3 letras"
+                : "ENTER para salvar | BACKSPACE para corrigir";
+            int instrW = MeasureText(instrucao, 20);
+            DrawText(instrucao,
+                     (GetScreenWidth() - instrW) / 2,
+                     430,
+                     20,
+                     LIGHTGRAY);
+
+            
+            char posStr[32];
+            sprintf(posStr, "%d/3", letrasDigitadas);
+            int posW = MeasureText(posStr, 20);
+            DrawText(posStr,
+                     (GetScreenWidth() - posW) / 2,
+                     470,
+                     20,
+                     GRAY);
+
+            EndDrawing();
+
+        } break;
+
+        case STATE_DERROTA: {
+
+            BeginDrawing();
+
+            Menu_DrawDerrota();
+
+            EndDrawing();
+
+            if (IsKeyPressed(KEY_ENTER))
+                gameState = STATE_MENU;
+
+        } break;
+
+        
+        
+        
+
+        case STATE_AGRADECIMENTO: {
+
+            BeginDrawing();
+
+            Menu_DrawAgradecimento();
+
+            EndDrawing();
+
+            if (IsKeyPressed(KEY_ENTER))
+                gameState = STATE_MENU;
+
+        } break;
+        }
     }
 
     CloseWindow();
+
     return 0;
 }

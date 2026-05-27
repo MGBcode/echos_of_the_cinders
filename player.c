@@ -14,8 +14,10 @@ bool PodeMoverPara(Level *level, float px, float py, float raio, int tw, int th)
            level_pode_mover(level, dir, baixo);
 }
 
-void InitPlayer(Player *player, int screenWidth, int screenHeight) {
-    player->pos = (Vector2){ (float)screenWidth/2, (float)screenHeight/2 };
+void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
+    player->tile_pos = (Vector2){ tileX, tileY };
+    player->pos = (Vector2){ tileX * level->tamanho_tile, tileY * level->tamanho_tile_h };
+    player->raio = level->tamanho_tile * 0.35f;
     player->normalSpeed = 200.0f;
     player->isDashing = false;
     player->dashSpeedMultiplier = 4.0f;
@@ -38,19 +40,16 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
     player->hitboxRadius = 0.0f;
     player->hitboxCenter = (Vector2){ 0, 0 };
     player->hasHitEnemy = false;
-    player->isParrying = false;
-    player->parryTimer = 0.0f;
-    player->parryDuration = 0.4f;
-    player->raio = 15.0f;
-    
-    // HUD - Vida e Estamina
     player->hpMax = 100;
     player->hp = player->hpMax;
     player->staminaMax = 100.0f;
     player->stamina = player->staminaMax;
     player->staminaRecoveryDelay = 1.5f;
     player->staminaRecoveryDelayCounter = 0.0f;
-    player->staminaRecoveryRate = 25.0f; // 20 pontos por segundo
+    player->staminaRecoveryRate = 25.0f;
+    player->isParrying = false;
+    player->parryTimer = 0.0f;
+    player->parryDuration = 0.4f;
     player->frascosMax = 3;
     player->frascosAtuais = 3;
     player->isHealing = false;
@@ -61,14 +60,16 @@ void InitPlayer(Player *player, int screenWidth, int screenHeight) {
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
-
-    player->raio = ((tw + th) / 2) * 0.3f;
-    player->normalSpeed = ((tw + th) / 2) * 3.5f;
-    
-    // Atualizar estamina
+    player->raio = level->tamanho_tile * 0.35f;
+    player->normalSpeed = 200.0f;
     UpdatePlayerStamina(player, deltaTime);
+    if (!player->alive) return;
 
-    // Atualizar timer de parry
+    float r = player->raio * 1.2f;
+
+    if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
+        player->cooldownTimeCounter -= deltaTime;
+
     if (player->isParrying) {
         player->parryTimer -= deltaTime;
         if (player->parryTimer <= 0.0f) {
@@ -76,14 +77,6 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->parryTimer = 0.0f;
         }
     }
-
-    // Se estiver morto, não processa entradas nem movimentos
-    if (!player->alive) return;
-
-    float r = player->raio * 1.2f;
-
-    if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
-        player->cooldownTimeCounter -= deltaTime;
 
     if (player->isHealing) {
         player->healingTimer -= deltaTime;
@@ -160,42 +153,40 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
-        PlayerUseStamina(player, 15.0f); // Consome 15 pontos de estamina
+        PlayerUseStamina(player, 15.0f);
     }
-    // --- Attack/Parry state machine: 0=none,1=windup,2=active,3=recovery ---
     const float ATTACK_COST = 22.5f;
     
-    // Mouse Left: Ataque Leve (Combo)
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        if (player->attackState == 3) {
-            // try to chain combo during recovery
-            if (player->comboStep < 3 && player->stamina >= ATTACK_COST && !player->isDashing) {
-                player->comboStep += 1;
-                player->attackState = 1; // windup
-                player->attackStateTimer = 0.0f;
-                player->hasHitEnemy = false;
-                PlayerUseStamina(player, ATTACK_COST);
-            }
-        } else if (player->attackState == 0 && !player->isDashing && player->stamina >= ATTACK_COST) {
-            // start new combo
-            player->comboStep = 1;
-            player->attackState = 1; // windup
-            player->attackStateTimer = 0.0f;
-            player->hasHitEnemy = false;
-            PlayerUseStamina(player, ATTACK_COST);
-        }
-    }
-    
-    // Mouse Right: Parry (Aparar)
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
         if (player->attackState == 0 && !player->isDashing && !player->isHealing && !player->isParrying) {
             player->isParrying = true;
             player->parryTimer = player->parryDuration;
         }
     }
+    
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (player->attackState == 3) {
+            if (player->comboStep < 3 && player->stamina >= ATTACK_COST && !player->isDashing) {
+                player->comboStep += 1;
+                player->attackState = 1; 
+                player->attackStateTimer = 0.0f;
+                player->hasHitEnemy = false;
+                PlayerUseStamina(player, ATTACK_COST);
+            }
+        } else if (player->attackState == 0) {
+            
+            if (!player->isDashing && player->stamina >= ATTACK_COST) {
+                player->comboStep = 1;
+                player->attackState = 1; 
+                player->attackStateTimer = 0.0f;
+                player->hasHitEnemy = false;
+                PlayerUseStamina(player, ATTACK_COST);
+            }
+        }
+
+    }
 
     if (player->isHealing) {
-        // While healing we can still move, but at reduced speed and no dash/attack allowed.
         player->attackState = 0;
         player->attackStateTimer = 0.0f;
         player->comboStep = 0;
@@ -204,15 +195,15 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     }
 
     if (player->attackState == 1) {
-        // windup
+        
         player->attackStateTimer += deltaTime;
         float windup = player->attackWindup[player->comboStep - 1];
         if (player->attackStateTimer >= windup) {
-            player->attackState = 2; // active
+            player->attackState = 2; 
             player->attackStateTimer = 0.0f;
             player->isHitboxActive = true;
             player->hasHitEnemy = false;
-            // setup hitbox
+            
             float distFront = 0.0f;
             if (player->comboStep == 1 || player->comboStep == 2) {
                 player->hitboxRadius = tw * 0.7f;
@@ -225,10 +216,10 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
         }
     } else if (player->attackState == 2) {
-        // active
+        
         player->attackStateTimer += deltaTime;
         float active = player->attackActive[player->comboStep - 1];
-        // keep hitbox positioned
+        
         float distFront = 0.0f;
         if (player->comboStep == 1 || player->comboStep == 2) {
             distFront = tw * 0.4f;
@@ -238,18 +229,18 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
         player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
 
-        // For third hit (lunge) we keep active for the full active duration while applying impulse
+        
         if (player->attackStateTimer >= active) {
-            player->attackState = 3; // recovery
+            player->attackState = 3; 
             player->attackStateTimer = 0.0f;
             player->isHitboxActive = false;
         }
     } else if (player->attackState == 3) {
-        // recovery (combo window)
+        
         player->attackStateTimer += deltaTime;
         float recovery = player->attackRecovery[player->comboStep - 1];
         if (player->attackStateTimer >= recovery) {
-            // end combo
+            
             player->attackState = 0;
             player->attackStateTimer = 0.0f;
             player->comboStep = 0;
@@ -274,15 +265,15 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->cooldownTimeCounter = player->dashCooldown;
         }
     } else if (player->attackState == 2 && player->comboStep == 3) {
-        // third-hit lunge during active
+        
         velX = player->lastMovingDir.x * (player->normalSpeed * 1.5f) * deltaTime;
         velY = player->lastMovingDir.y * (player->normalSpeed * 1.5f) * deltaTime;
     } else if (player->attackState == 1 || player->attackState == 2 || player->isParrying) {
-        // locked during windup/active/parry (except third active lunge handled above)
+        
         velX = 0;
         velY = 0;
     } else {
-        // normal movement (includes recovery and none)
+        
         velX = inputDir.x * movementSpeed * deltaTime;
         velY = inputDir.y * movementSpeed * deltaTime;
     }
@@ -296,6 +287,10 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     if (velY != 0.0f && PodeMoverPara(level, player->pos.x, novo_y, r, tw, th)) {
         player->pos.y = novo_y;
     }
+
+    // Atualizar tile_pos baseado na posição em pixels
+    player->tile_pos.x = player->pos.x / tw;
+    player->tile_pos.y = player->pos.y / th;
 }
 
 void DrawPlayer(Player player) {
@@ -315,11 +310,10 @@ void DrawPlayer(Player player) {
     }
 }
 
-// HUD - Funções de Vida e Estamina
+
 void PlayerTakeDamage(Player *player, int damage) {
-    // Dano normal: pode ser bloqueado por parry
     if (player->isParrying) {
-        return; // Parry bem-sucedido, sem dano
+        return;
     }
     if (player->isDashing) return;
 
@@ -327,7 +321,7 @@ void PlayerTakeDamage(Player *player, int damage) {
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {
         player->alive = false;
-        // cancelar ações
+        
         player->isDashing = false;
         player->isHitboxActive = false;
         player->isParrying = false;
@@ -335,16 +329,15 @@ void PlayerTakeDamage(Player *player, int damage) {
 }
 
 void PlayerTakeDamage_IgnoreParry(Player *player, int damage) {
-    // Dano ignorando parry: para projéteis e AoE
     if (player->isDashing) return;
 
-    player->isParrying = false; // Interrompe parry
+    player->isParrying = false;
 
     player->hp -= damage;
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {
         player->alive = false;
-        // cancelar ações
+        
         player->isDashing = false;
         player->isHitboxActive = false;
         player->isParrying = false;
@@ -355,16 +348,16 @@ void PlayerUseStamina(Player *player, float amount) {
     player->stamina -= amount;
     if (player->stamina < 0.0f) player->stamina = 0.0f;
     
-    // Reset do delay de recuperação quando consome estamina
+    
     player->staminaRecoveryDelayCounter = 0.0f;
 }
 
 void UpdatePlayerStamina(Player *player, float deltaTime) {
-    // Aumentar o contador de delay
+    
     if (player->staminaRecoveryDelayCounter < player->staminaRecoveryDelay) {
         player->staminaRecoveryDelayCounter += deltaTime;
     } else {
-        // Se passou 2 segundos sem atacar/fazer dash, recuperar estamina
+        
         player->stamina += player->staminaRecoveryRate * deltaTime;
         if (player->stamina > player->staminaMax) {
             player->stamina = player->staminaMax;
@@ -373,18 +366,18 @@ void UpdatePlayerStamina(Player *player, float deltaTime) {
 }
 
 void DrawPlayerHUD(const Player *player, int x, int y) {
-    // --- VIDA ---
+    
     DrawText(TextFormat("HP: %d/%d", player->hp, player->hpMax), x, y, 20, LIGHTGRAY);
     
     const int barW = 220;
     const int barH = 14;
     const int barY = y + 24;
     
-    // Barra de vida - fundo
+    
     DrawRectangle(x, barY, barW, barH, (Color){ 40, 40, 40, 220 });
     DrawRectangleLines(x, barY, barW, barH, (Color){ 110, 110, 110, 255 });
     
-    // Barra de vida - preenchimento
+    
     float hpRatio = (float)player->hp / (float)player->hpMax;
     if (hpRatio < 0.0f) hpRatio = 0.0f;
     if (hpRatio > 1.0f) hpRatio = 1.0f;
@@ -393,17 +386,17 @@ void DrawPlayerHUD(const Player *player, int x, int y) {
     Color hpFill = (hpRatio > 0.5f) ? GREEN : (hpRatio > 0.25f ? ORANGE : RED);
     DrawRectangle(x + 1, barY + 1, hpFillW - 2 > 0 ? hpFillW - 2 : 0, barH - 2, hpFill);
     
-    // --- ESTAMINA ---
+    
     int staminaY = barY + barH + 20;
     DrawText(TextFormat("STAMINA: %.0f/%.0f", player->stamina, player->staminaMax), x, staminaY, 20, LIGHTGRAY);
     
     const int staminaBarY = staminaY + 24;
     
-    // Barra de estamina - fundo
+    
     DrawRectangle(x, staminaBarY, barW, barH, (Color){ 40, 40, 40, 220 });
     DrawRectangleLines(x, staminaBarY, barW, barH, (Color){ 110, 110, 110, 255 });
     
-    // Barra de estamina - preenchimento
+    
     float staminaRatio = player->stamina / player->staminaMax;
     if (staminaRatio < 0.0f) staminaRatio = 0.0f;
     if (staminaRatio > 1.0f) staminaRatio = 1.0f;
