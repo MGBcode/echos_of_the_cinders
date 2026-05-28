@@ -1,263 +1,205 @@
 CONSTRUÇÃO DA TELA:
-    screenWidth = largura da tela em pixels
-    screenHeight = altura da tela em pixels
+    screenWidth = largura da janela em pixels
+    screenHeight = altura da janela em pixels
 
-VARIÁVEIS DE TEMPO E CONTROLES GERAIS:
-    deltaTime = armazena o tempo real (em frações de segundo) que se passou entre o frame anterior e o atual. Usado para padronizar velocidades e cronômetros independentemente de quantos FPS o computador está rodando
-    inputDir = vetor (X, Y) temporário que capta e armazena a direção que as setas do teclado estão apontando no exato momento
+VARIÁVEIS DE TEMPO E CONTROLE GERAL:
+    deltaTime = tempo real entre o frame anterior e o atual, em frações de segundo. É usado para
+                padronizar velocidades, animações e cronômetros independentemente do FPS.
+    inputDir = vetor temporário (X, Y) que guarda a direção atual do movimento do jogador.
 
-VARIÁVEIS BASE DO JOGADOR (AGORA DENTRO DA STRUCT PLAYER):
-    pos = posição atual do jogador na tela (substituiu o antigo playerPos)
-    normalSpeed = velocidade base do jogador em pixels por segundo
+VARIÁVEIS BASE DO JOGADOR (STRUCT Player):
+    pos = posição atual do jogador na tela
+    raio = raio usado para desenho e colisão
+    normalSpeed = velocidade base do jogador, em pixels por segundo
 
 VARIÁVEIS DO DASH:
-    isDashing = verifica se o player está dando dash
+    isDashing = indica se o player está executando dash
+    dashSpeedMultiplier = multiplicador aplicado sobre a velocidade base durante o dash
+    dashDuration = duração máxima do dash
+    dashCooldown = tempo de recarga entre dashes
+    dashTimeCounter = contador que mede quanto tempo o dash atual já durou
+    cooldownTimeCounter = contador de recarga após o fim do dash
+    dashDirection = direção congelada no momento da ativação do dash
+    lastMovingDir = última direção válida de movimento do jogador
+    diagonalBufferTimer = pequeno timer usado para estabilizar mudanças de direção
 
-    dashSpeedMultiplier = regula a velocidade do dash multiplicando a velocidade base do jogador pelo valor da variável
-    dashDuration = duração do dash
+VARIÁVEIS DOS ATAQUES LEVES:
+    comboStep = etapa atual do combo de ataques leves
+    attackState = estado atual da sequência de ataque
+    attackStateTimer = timer do estado atual do ataque
+    comboWindowTimer = janela de tempo que permite continuar o combo
+    attackWindup[] = tempo de preparação de cada golpe
+    attackActive[] = tempo em que a hitbox fica ativa
+    attackRecovery[] = tempo de recuperação após o golpe
+    hitboxCenter = ponto central da hitbox do golpe naquele frame
+    hitboxRadius = alcance da hitbox do golpe
+    isHitboxActive = indica se a hitbox do ataque deve ser desenhada e processada
+    hasHitEnemy = evita múltiplos acertos no mesmo ataque
 
-    dashCooldown = tempo de espera para iniciar outro dash
+ESTRUTURAS E TIPOS:
+    Player = struct que agrupa os dados do jogador, como posição, HP, estamina, estados de dash,
+             parry, cura e combo.
 
-    dashTimeCounter = contador utilizado para verificar se o dash não passou do limite de tempo imposto na variável dashDuration (toda vez que a tecla espaço é apertada ela reinicia)
+FUNÇÕES DO JOGADOR (player.c):
+    InitPlayer = preenche a struct Player com os valores iniciais da partida
+    UpdatePlayer = processa movimento, leitura do teclado, dash, cura, parry, ataques e estamina
+    DrawPlayer = desenha o jogador de acordo com o estado atual (normal, dash, recarga, parry)
 
-    cooldownTimeCounter = cronômetro que faz a contagem regressiva do tempo de recarga após o fim de um dash. O jogador só pode dar um novo dash quando essa variável chegar a zero ou menos
-    dashDirection = direção do dash congelada no momento da ativação, garantindo que o dash siga reto mesmo que o jogador solte as teclas
-    
-    lasMovingDir = serve para salvar a ultima direção que o player andou,pra caso o player dê dash sem se movimentar,ele ir na direção da ultima andada que ele deu
-    diagonalBufferTimer = Timer para validar mudança de direção
+FUNÇÕES DA RAYLIB / RAYMATH:
+    InitWindow = cria a janela do jogo e define título e dimensões
+    SetTargetFPS = limita a taxa de atualização do jogo
+    WindowShouldClose = retorna verdadeiro quando o usuário fecha a janela ou aciona a tecla de saída
+    GetFrameTime = retorna o tempo do frame atual
+    IsKeyDown = verifica se uma tecla está sendo segurada
+    IsKeyPressed = verifica se uma tecla foi pressionada neste frame
+    Vector2Normalize = normaliza vetores, evitando movimento diagonal mais rápido que o reto
+    BeginDrawing = inicia a renderização do frame
+    ClearBackground = limpa a tela com uma cor sólida
+    DrawCircleV = desenha um círculo usando um Vector2 como centro
+    DrawCircleGradient = desenha um círculo com gradiente radial
+    DrawText = desenha texto na tela
+    TextFormat = monta texto formatado com variáveis
+    EndDrawing = encerra a renderização do frame
+    CloseWindow = fecha a janela e libera recursos da biblioteca
 
-VARIÁVEIS DOS ATAQUES LEVE:
-    comboStep = é um inteiro acumulativo que funciona como se fosse uma marcha,ela vai de 0 a 3 e representa em ques estado do combo o cavaleiro está
-    attackTimer = é o tempo de duração do ataque(tempo que leva do inicio do ataque até o final da ação de atacar)
-    
-    comboWindowTimer = é o tempo de cooldown após o attackTimer,pois após o personagem atacar ele precisa voltar a uma posição inicial para voltar a receber inputs,tbm serve como janela de tempo em que se o jogador apertar o botão de ataque dnv,o combo continuará
-    cooldownattackTimer = cronômetro que faz a contagem regressiva do attackTimer
-    
-    cooldowncomboWindowTimer = cronômetro que faz a contagem regressiva do comboWindowTimer
-    hitboxCenter = Ela define o ponto exato no mapa onde o ataque do player está acontecendo naquele frame.
-    hitboxRadius = define o alcance ou a largura do golpe do cavaleiro.
-    isHitboxActive = serve para o código saber se o cavaleiro está em estado de ataque ou não,para entao poder criar as hitboxes
-    hasHitEnemy = serve para dizer se o cavaleiro está atualmente acertando um hit ou nn em um inimigo
-
-ESTRUTURAS E TIPOS (STRUCTS):
-    Player = pacote de dados (struct) que agrupa todas as variáveis do jogador (posição, velocidade, informações do dash). Facilita enviar as informações do jogador de um arquivo para o outro
-
-FUNÇÕES DO JOGADOR (CRIADAS POR NÓS NO PLAYER.C):
-    InitPlayer = preenche a variável do tipo Player com os dados iniciais do jogo (coloca no meio da tela, zera os contadores de dash)
-    UpdatePlayer = engloba toda a matemática da movimentação, leitura do teclado, cálculo de deltaTime, ativação do dash e diminuição do tempo de recarga
-    DrawPlayer = cuida exclusivamente de checar o status do jogador (se está em dash, em recarga ou normal) e desenha os círculos correspondentes na tela
-
-FUNÇÕES DO RAYLIB E RAYMATH UTILIZADAS:
-    InitWindow = abre a janela do jogo e define o tamanho e título
-    SetTargetFPS = trava a taxa de atualização do jogo em um limite (ex: 60 frames por segundo)
-
-    WindowShouldClose = retorna verdadeiro se o jogador clicou no X de fechar a janela ou apertou ESC
-    GetFrameTime = pega o tempo do frame para alimentar a nossa variável deltaTime
-
-    IsKeyDown = verifica se uma tecla está sendo segurada (usado para o movimento constante de andar)
-    IsKeyPressed = verifica se a tecla foi apertada uma única vez naquele exato frame (usado para acionar o dash uma vez só)
-
-    Vector2Normalize = função matemática que encurta vetores diagonais. Evita que andar para Cima+Direita faça o personagem correr mais rápido do que andar em linha reta
-    BeginDrawing = avisa a placa de vídeo que vamos começar a "pintar" o frame atual
-
-    ClearBackground = pinta a tela inteira de uma cor sólida para apagar o "rastro" do frame passado
-    DrawCircleV = desenha um círculo sólido usando um Vector2 como coordenadas centrais
-
-    DrawCircleGradient = desenha um círculo que começa com uma cor no miolo e faz um degradê até as bordas
-    DrawText = desenha frases na tela
-
-    TextFormat = mistura texto com variáveis (semelhante ao printf) para conseguir imprimir os números dos cronômetros na tela
-    EndDrawing = finaliza a pintura e empurra a imagem pronta para o monitor do jogador
-    
-    CloseWindow = destroi a janela do jogo e libera a memória quando o programa encerra
-
-MÓDULO DE MAPA (level.h e level.c)
-
-    --> LARGURA_MAPA e ALTURA_MAPA
-    São as constantes (#define) que dizem quantos "blocos" o mapa tem de comprimento e altura. Se aumentar esses números, os blocos encolhem e a arena fica maior visualmente.
-
-    --> enum TipeTile
-    É a lista de "identidades" que um bloco pode ter (TILE_VAZIO, TILE_PAREDE, TILE_PORTA, etc).
-
-    --> struct Level
-    A estrutura principal do mapa. Ela guarda a "grade" (uma matriz/tabela bidimensional que é a planta baixa da sala) e guarda também o tamanho matemático de cada bloco em pixels (tamanho_tile).
-
-    --> level_iniciar()
-    É o setup inicial. Ele varre a grade inteira usando "for". Se a posição for na borda da matriz (x=0 ou y=0), ele coloca uma parede. Se for no meio, coloca chão vazio.
-
-    --> level_atualizar_tile()
-    Faz a matemática responsiva: pega o tamanho da janela (GetScreenWidth) e divide pela quantidade de colunas. Isso garante que o mapa sempre estique e ocupe 100% da tela perfeitamente, sem sobrar espaço preto.
-
-    --> level_desenhar()
-    É o "pintor". Ele roda a 60 frames por segundo dentro da main. Ele varre a matriz inteira e, usando um switch-case, escolhe uma cor dependendo do TipeTile que estiver salvo naquele quadrado, pintando-o na tela com DrawRectangle().
-
-    ============================================================
-ARQUIVOS: enemy.h / enemy.c
-OBJETIVO: Implementação do sistema de Inteligência Artificial e Combate do Boss.
-============================================================
-ALTERAÇÕES RECENTES (RESUMO TÉCNICO)
-------------------------------------------------------------
-player.h = define os campos do jogador, incluindo HP, estamina, morte e estados de ataque.
-player.c = implementa a máquina de estados de ataque do jogador, HUD do player e gestão de estamina.
-main.c = reposiciona HUDs e aplica dano do boss ao player usando a hitbox ativa.
-explicacoes.txt = documenta as mudanças recentes no projeto seguindo o estilo de funções/variáveis.
-
-1. ESTRUTURAS PRINCIPAIS
-     - `player.h` : novos campos (`hp`, `stamina`, `alive`, `attackState` etc.)
-     - `player.c` : implementação da máquina de estados de ataque, consumo/recovery
-                                    de estamina, HUD drawing.
-     - `main.c`   : reposicionamento dos HUDs, aplicação de dano do boss ao player
-                                    via `Boss_GetAttackCircle()`.
-
-
-
-1. ESTRUTURAS PRINCIPAIS
-------------------------------------------------------------
-- BossState (Enum): Gerencia a Máquina de Estados do inimigo.
-    * WANDER: Movimentação aleatória inicial.
-    * ALERT: Transição ao detectar o jogador.
-    * COMBAT: Perseguição ativa.
-    * ATTACK_LIGHT/BRUTAL: Estados de execução de golpes.
-    * COOLDOWN: Janela de vulnerabilidade após atacar.
-
-- AttackCircle: Define a área de impacto (hitbox) dos ataques do Boss.
-    * center/radius: Localização e tamanho do golpe.
-    * damage: Quantidade de vida subtraída do player.
-    * active: Flag que determina se o dano deve ser processado.
-
-- Boss (Struct): Armazena todos os dados do inimigo, incluindo HP, 
-  posição, velocidades e temporizadores de cada fase de ataque.
-
-2. FUNÇÕES DE LÓGICA (enemy.c)
-------------------------------------------------------------
-- Boss_Init: 
-    Inicializa o Boss com seus atributos de vida e combate. 
-    Configura os tempos de 'windup' (preparação) e 'recovery' 
-    (recuperação) para equilibrar a dificuldade.
-
-- Boss_Update: 
-    Executa a cada frame. Controla a visão do Boss (aggroRadius) 
-    e a lógica de movimentação com colisão. Gerencia a transição 
-    entre estados e o processamento de dano ao colidir com o Player.
-
-- MoveWithCollision: 
-    Sistema de física simples que permite ao Boss deslizar em 
-    paredes ao colidir, tratando os eixos X e Y de forma independente.
-
-3. SISTEMA DE COMBATE
-------------------------------------------------------------
-- Ataque Leve: Golpe rápido com pouco tempo de preparação.
-- Ataque Brutal: Inclui uma investida (lunge) em direção à 
-  última posição conhecida do jogador, causando dano alto.
-- Feedback Visual: O Boss altera sua cor via código conforme o 
-  estado (Alerta, Ataque ou Dano) para informar o jogador.
-
-4. VARIÁVEIS GLOBAIS / CONSTANTES LÓGICAS
-------------------------------------------------------------
-- LARGURA_MAPA / ALTURA_MAPA: Usadas para cálculos de colisão 
-  com o cenário (provenientes do level.h).
-- deltaTime (dt): Garante que a velocidade do Boss e seus 
-  ataques sejam consistentes independente do FPS.
-============================================================
-
-============================================================
-MÓDULO DE SALA DE TREINO (level.h e level.c - DETALHADO)
-============================================================
-OBJETIVO: Gerenciar a disposição das salas do jogo, colisões e ambiente responsivo.
-
-ESTRUTURA SALA_TREINO:
-    - Dimensões: 25 colunas × 19 linhas de tiles
-    - Parede de proteção nas bordas (impede sair da arena)
-    - Dummy de treinamento posicionado no centro para praticar combos
-    - Porta de saída localizada à direita (transição para SALA_BOSS)
-
-ESTRUTURA SALA_BOSS:
-    - Arena de combate contra o chefe
-    - Porta bloqueada até o Boss ser derrotado
-    - Maior espaço para movimentação em combate
-
-TIPOS DE TILES:
-    - TILE_VAZIO: Bloco vazio, totalmente passável
-    - TILE_PAREDE: Parede sólida nas bordas do mapa
-    - TILE_BLOCO: Obstáculo/bloco colisível (pode ser removido para simplificar layout)
-    - TILE_PORTA: Porta/saída de transição entre salas
-
-VARIÁVEIS E FUNÇÕES PRINCIPAIS:
-
-    tamanho_tile = Armazena o tamanho em pixels de cada tile. Calculado dinamicamente
-                   para que o mapa sempre preencha 100% da tela sem deformação.
-    
-    grade[ALTURA_MAPA][LARGURA_MAPA] = Matriz 2D que representa a planta baixa da sala.
-                                        Cada posição contém um TipeTile indicando tipo do bloco.
-
-    level_iniciar() = Função de setup. Varre a matriz inteira e preenche com valores iniciais
-                      (bordas = paredes, miolo = vazio). Define a primeira sala como SALA_TREINO.
-
-    level_atualizar_tile() = Recalcula tamanho_tile baseado na resolução atual da tela.
-                             Essencial ao redimensionar a janela para manter responsividade.
-                             Fórmula: tamanho_tile = screenWidth / LARGURA_MAPA
-
-    level_desenhar() = Renderiza todos os tiles na tela a cada frame. Percorre a matriz
-                       e usa DrawRectangle com cores diferentes para cada tipo de tile.
-
-    level_pode_mover(pos, raio) = Verifica colisão entre uma posição circular (pos + raio)
-                                  e os tiles sólidos (PAREDE, BLOCO). Retorna verdadeiro se
-                                  o movimento é permitido, falso se há obstrução.
-
-    level_carregar_sala(sala) = Carrega o layout de uma sala específica. Modifica a grade
-                                de acordo com a sala solicitada (SALA_TREINO ou SALA_BOSS).
-                                Recalcula tamanho_tile ao mudar de sala.
-
-    level_abrir_saida_boss() = Desbloqueando a porta de saída quando o Boss é derrotado.
-                               Muda o TILE_PORTA de bloqueado para passável.
+MÓDULO DE MAPA (level.h e level.c):
+    LARGURA_MAPA e ALTURA_MAPA = definem quantas colunas e linhas o mapa possui
+    enum TipeTile = lista dos tipos de tiles usados pelo mapa (TILE_VAZIO, TILE_PAREDE, TILE_PORTA etc.)
+    struct Level = guarda a grade do mapa e os tamanhos matemáticos dos tiles em pixels
+    level_iniciar() = cria a primeira sala e preenche bordas com parede e interior com vazio
+    level_atualizar_tile() = recalcula o tamanho dos tiles de acordo com a resolução atual da tela
+    level_desenhar() = percorre a grade e desenha cada tile com uma cor diferente
+    level_pode_mover() = verifica se um movimento circular pode ocupar um tile sem colisão
+    level_carregar_sala() = troca a sala atual entre treino e boss
+    level_abrir_saida_boss() = libera a porta da sala do boss quando ele é derrotado
 
 DUMMY DE TREINAMENTO:
-    - Posição fixa no centro da SALA_TREINO
-    - Raio: 50px (25px Player < 50px Dummy < 70px Boss)
-    - HP infinito (999999) para treinar ataques ilimitadamente
-    - Não se move nem contra-ataca, apenas recebe dano
-    - Útil para testar combos, timing e dano de ataques
+    - Fica fixo no centro da sala de treino
+    - Possui HP praticamente infinito para teste de combos
+    - Não se move nem reage
+    - Serve para testar timing, alcance e dano dos ataques do jogador
 
 ============================================================
 MÓDULO DE MENU (menu.h e menu.c)
 ============================================================
-OBJETIVO: Gerenciar a interface do usuário, navegação entre telas e exibição do ranking.
-
-ESTRUTURA DO MENU:
+OBJETIVO: gerenciar telas, navegação e ranking.
 
 TELA PRINCIPAL (Menu_DrawPrincipal):
-    - Título do jogo centralizado no topo
-    - Botão "JOGAR" - Inicia o jogo na SALA_TREINO
-    - Botão "MELHORES TEMPOS" - Exibe o ranking dos top 10 jogadores
-    - Efeito hover nos botões (mudam de cor ao passar o mouse)
+    - Mostra o título do jogo
+    - Botão JOGAR para iniciar a sala de treino
+    - Botão MELHORES TEMPOS para abrir o ranking
+    - Feedback visual ao passar o mouse nos botões
 
 TELA DE RANKING (Menu_DrawRecordes):
-    - Exibe os 10 melhores tempos do arquivo scores.txt
-    - Mostra: Posição (1-10), Nome do jogador (3 iniciais) e Tempo em segundos
-    - Ordenado de forma ascendente (menor tempo = melhor = primeira posição)
-    - Botão "VOLTAR" para retornar à tela principal
+    - Mostra os 10 melhores tempos salvos em scores.txt
+    - Exibe posição, iniciais do jogador e tempo
+    - Ordena do menor tempo para o maior
+    - Permite voltar para o menu principal
 
 TELA DE DERROTA (Menu_DrawDerrota):
-    - Fundo vermelho indicando morte do jogador
-    - Mensagem "VOCÊ PERDEU"
-    - Oferece opção de tentar novamente ou voltar ao menu
+    - Exibe tela de derrota
+    - Permite tentar novamente ou retornar ao menu
 
 TELA DE AGRADECIMENTO (Menu_DrawAgradecimento):
-    - Fundo dourado indicando vitória
-    - Mensagem de parabéns ao derrotar o Boss
-    - Pede as 3 iniciais do nome do jogador para salvar no ranking
-    - Campo de input para digitar nome e salvar tempo
+    - Exibe tela de vitória
+    - Solicita 3 iniciais do jogador
+    - Salva o tempo final no ranking
 
 VARIÁVEIS PRINCIPAIS:
+    isHovering = indica se o mouse está sobre um botão
+    selectedInitial = índice da inicial sendo editada
+    playerInitials[3] = armazena as 3 iniciais do jogador
 
-    isHovering = Flag que detecta se o mouse está sobre um botão.
-                 Usada para mudar a cor do botão como feedback visual.
+============================================================
+MÓDULO DE TIMER (timer.h e timer.c)
+============================================================
+OBJETIVO: controlar o cronômetro da partida e o ranking de tempos.
 
-    MouseX, MouseY = Coordenadas atuais do mouse obtidas via GetMouseX/GetMouseY.
-                     Usadas para detectar clique nos botões.
+COMPONENTES PRINCIPAIS:
+    cronômetro in-game = inicia ao entrar na sala de treino e para ao vencer o boss
+    MIN_VALID_TIME = tempo mínimo aceito para salvar score
+    MAX_SCORES = limite máximo de posições no ranking
 
-    selectedInitial = Índice do caractere atualmente selecionado no input do nome.
-    playerInitials[3] = Array de caracteres para armazenar as 3 iniciais do nome.
+Score (struct):
+    - initialName[3] = iniciais do jogador
+    - time = tempo final em segundos
+
+ARQUIVO scores.txt:
+    - Fica na raiz do projeto
+    - Cada linha segue o formato "XXX Y.YY"
+    - Armazena os melhores tempos em ordem crescente
+
+FUNÇÕES PRINCIPAIS:
+    SaveScore() = salva um novo tempo se ele for válido e entrar no top 10
+    LoadScores() = carrega os tempos salvos do arquivo
+    ResetTimer() = zera o cronômetro
+    UpdateTimer(float deltaTime) = incrementa o tempo da partida
+    GetElapsedTime() = retorna o tempo decorrido atual
+
+FLUXO DE JOGO:
+    1. O jogador entra na sala de treino
+    2. O cronômetro é reiniciado
+    3. O tempo é atualizado a cada frame
+    4. O boss é derrotado
+    5. A tela de agradecimento solicita as iniciais
+    6. O score é salvo e o ranking é atualizado
+
+============================================================
+MÓDULO DE IA E COMBATE DO BOSS (enemy.h e enemy.c)
+============================================================
+OBJETIVO: controlar estados, movimentação, ataques e colisões do chefe.
+
+ESTRUTURAS PRINCIPAIS:
+    BossState = máquina de estados do boss
+        - BOSS_OBSERVE: aproxima e avalia distância
+        - BOSS_HUNT: perseguição ativa
+        - BOSS_ATTACK: execução do ataque selecionado
+        - BOSS_COOLDOWN: pausa após o ataque
+
+    BossAttackType = tipos de ataque do boss
+        - BOSS_ATTACK_TYPE_LIGHT
+        - BOSS_ATTACK_TYPE_HEAVY
+        - BOSS_ATTACK_TYPE_BRUTAL
+        - BOSS_ATTACK_TYPE_PROJECTILE
+        - BOSS_ATTACK_TYPE_AOE_BURST
+
+    AttackCircle = hitbox circular usada pelos ataques do boss
+        - center = centro do ataque
+        - radius = alcance
+        - damage = dano aplicado
+        - active = indica se o ataque deve ser processado
+
+    ProjectileNode = lista encadeada de projéteis usados pelo boss
+
+    Boss = struct principal do inimigo, com HP, posição, velocidades, timers, fases e dados de ataque
+
+FUNÇÕES DE LÓGICA:
+    Boss_Init() = inicializa HP, fase, velocidades, timers e parâmetros de ataque
+    Boss_Update() = executa a IA a cada frame, decide ataques, move o boss e processa dano
+    Boss_Draw() = desenha o boss e seus efeitos visuais
+    Boss_GetAttackCircle() = expõe a hitbox do ataque atual quando ela estiver ativa
+    MoveWithCollision() = desloca o boss com colisão, tratando X e Y separadamente
+
+SISTEMA DE COMBATE:
+    - Ataque Leve: sequência rápida de golpes curtos
+    - Ataque Pesado: combo com golpe 1, dash e golpe 2
+    - Ataque Brutal: investida forte em linha reta
+    - Projéteis: usados apenas em longa distância e na fase 2, nunca como primeiro ataque
+    - AoE Burst: disparo em área que ocorre ao atingir 50% de HP e novamente ao atingir 15% de HP
+
+REGRAS ATUAIS DA IA:
+    - Distância curta: Light e Heavy
+    - Distância média: Brutal e Heavy
+    - Distância longa: Projéteis com prioridade alta na fase 2
+    - O boss evita repetir o mesmo ataque duas vezes seguidas quando há alternativa válida
+    - Após projéteis, o boss retorna para BOSS_HUNT para continuar a perseguição
+
+VARIÁVEIS LÓGICAS IMPORTANTES:
+    deltaTime = mantém o comportamento independente do FPS
+    aggroRadius = raio de detecção do jogador
+    observeSpeed e huntSpeed = velocidades de movimentação do boss
+    brutalLungeSpeed = velocidade da investida do Brutal
+    aoe50Triggered e aoe15Triggered = controlam os disparos únicos do AoE em vida crítica
 
 FUNÇÕES PRINCIPAIS:
 
