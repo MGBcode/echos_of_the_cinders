@@ -18,7 +18,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->tile_pos = (Vector2){ tileX, tileY };
     player->pos = (Vector2){ tileX * level->tamanho_tile, tileY * level->tamanho_tile_h };
     player->raio = level->tamanho_tile * 0.35f;
-    player->normalSpeed = 200.0f;
+    player->normalSpeed = 400.0f;
     player->isDashing = false;
     player->dashSpeedMultiplier = 4.0f;
     player->dashDuration = 0.20f;
@@ -40,6 +40,9 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->hitboxRadius = 0.0f;
     player->hitboxCenter = (Vector2){ 0, 0 };
     player->hasHitEnemy = false;
+    player->isParrying = false;
+    player->parryTimer = 0.0f;
+    player->parryDuration = 0.4f;
     player->hpMax = 100;
     player->hp = player->hpMax;
     player->staminaMax = 100.0f;
@@ -47,9 +50,6 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->staminaRecoveryDelay = 1.5f;
     player->staminaRecoveryDelayCounter = 0.0f;
     player->staminaRecoveryRate = 25.0f;
-    player->isParrying = false;
-    player->parryTimer = 0.0f;
-    player->parryDuration = 0.4f;
     player->frascosMax = 3;
     player->frascosAtuais = 3;
     player->isHealing = false;
@@ -60,15 +60,15 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;
+    bool staminaInfinite = (level->salaAtual == SALA_TREINO);
     player->raio = level->tamanho_tile * 0.35f;
-    player->normalSpeed = 200.0f;
-    UpdatePlayerStamina(player, deltaTime);
-    if (!player->alive) return;
-
-    float r = player->raio * 1.2f;
-
-    if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
-        player->cooldownTimeCounter -= deltaTime;
+    player->normalSpeed = 400.0f;
+    if (staminaInfinite) {
+        player->stamina = player->staminaMax;
+        player->staminaRecoveryDelayCounter = player->staminaRecoveryDelay;
+    } else {
+        UpdatePlayerStamina(player, deltaTime);
+    }
 
     if (player->isParrying) {
         player->parryTimer -= deltaTime;
@@ -87,6 +87,13 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             if (player->hp > player->hpMax) player->hp = player->hpMax;
         }
     }
+
+    if (!player->alive) return;
+
+    float r = player->raio * 1.2f;
+
+    if (!player->isDashing && player->cooldownTimeCounter > 0.0f)
+        player->cooldownTimeCounter -= deltaTime;
 
     Vector2 inputDir = { 0.0f, 0.0f };
     bool rightDown = IsKeyDown(KEY_D);
@@ -137,13 +144,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->diagonalBufferTimer = 0;
     }
 
-    if (IsKeyPressed(KEY_Q) && player->frascosAtuais > 0 && !player->isDashing && player->attackState == 0 && !player->isHealing) {
-        player->isHealing = true;
-        player->healingTimer = 1.0f;
-        player->frascosAtuais -= 1;
-    }
-
-    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && player->stamina >= 15.0f && !player->isHealing) {
+    if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (staminaInfinite || player->stamina >= 15.0f)) {
         player->attackState = 0;
         player->attackStateTimer = 0.0f;
         player->comboStep = 0;
@@ -153,37 +154,59 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->isDashing = true;
         player->dashTimeCounter = 0.0f;
         player->dashDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
-        PlayerUseStamina(player, 15.0f);
+        if (!staminaInfinite) {
+            PlayerUseStamina(player, 15.0f);
+        }
     }
-    const float ATTACK_COST = 22.5f;
-    
+    if (IsKeyPressed(KEY_Q) &&
+        player->frascosAtuais > 0 &&
+        !player->isDashing &&
+        player->attackState == 0 &&
+        !player->isHealing)
+    {
+        player->isHealing = true;
+        player->healingTimer = 1.0f;
+        player->frascosAtuais -= 1;
+    }
+
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-        if (player->attackState == 0 && !player->isDashing && !player->isHealing && !player->isParrying) {
+        if (player->attackState == 0 &&
+            !player->isDashing &&
+            !player->isHealing &&
+            !player->isParrying)
+        {
             player->isParrying = true;
             player->parryTimer = player->parryDuration;
         }
     }
-    
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+
+    const float ATTACK_COST = 22.5f;
+    if (!player->isHealing &&
+        !player->isParrying &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    {
         if (player->attackState == 3) {
-            if (player->comboStep < 3 && player->stamina >= ATTACK_COST && !player->isDashing) {
+            if (player->comboStep < 3 && (staminaInfinite || player->stamina >= ATTACK_COST) && !player->isDashing) {
                 player->comboStep += 1;
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
-                PlayerUseStamina(player, ATTACK_COST);
+                if (!staminaInfinite) {
+                    PlayerUseStamina(player, ATTACK_COST);
+                }
             }
         } else if (player->attackState == 0) {
             
-            if (!player->isDashing && player->stamina >= ATTACK_COST) {
+            if (!player->isDashing && (staminaInfinite || player->stamina >= ATTACK_COST)) {
                 player->comboStep = 1;
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
-                PlayerUseStamina(player, ATTACK_COST);
+                if (!staminaInfinite) {
+                    PlayerUseStamina(player, ATTACK_COST);
+                }
             }
         }
-
     }
 
     if (player->isHealing) {
@@ -255,6 +278,8 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     float velY = 0;
     float movementSpeed = player->normalSpeed * (player->isHealing ? 0.4f : 1.0f);
 
+    
+
     if (player->isDashing) {
         velX = player->dashDirection.x * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
         velY = player->dashDirection.y * (player->normalSpeed * player->dashSpeedMultiplier) * deltaTime;
@@ -288,7 +313,6 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->pos.y = novo_y;
     }
 
-    // Atualizar tile_pos baseado na posição em pixels
     player->tile_pos.x = player->pos.x / tw;
     player->tile_pos.y = player->pos.y / th;
 }
@@ -315,6 +339,7 @@ void PlayerTakeDamage(Player *player, int damage) {
     if (player->isParrying) {
         return;
     }
+
     if (player->isDashing) return;
 
     player->hp -= damage;
@@ -325,6 +350,7 @@ void PlayerTakeDamage(Player *player, int damage) {
         player->isDashing = false;
         player->isHitboxActive = false;
         player->isParrying = false;
+        player->isHealing = false;
     }
 }
 
@@ -337,10 +363,10 @@ void PlayerTakeDamage_IgnoreParry(Player *player, int damage) {
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {
         player->alive = false;
-        
         player->isDashing = false;
         player->isHitboxActive = false;
         player->isParrying = false;
+        player->isHealing = false;
     }
 }
 
@@ -403,4 +429,18 @@ void DrawPlayerHUD(const Player *player, int x, int y) {
     
     int staminaFillW = (int)(barW * staminaRatio);
     DrawRectangle(x + 1, staminaBarY + 1, staminaFillW - 2 > 0 ? staminaFillW - 2 : 0, barH - 2, YELLOW);
+
+    DrawText(TextFormat("Curas: %d/%d", player->frascosAtuais, player->frascosMax),
+             x,
+             staminaBarY + barH + 18,
+             20,
+             LIGHTGRAY);
+
+    if (player->isHealing) {
+        DrawText("Curando...",
+                 x,
+                 staminaBarY + barH + 42,
+                 20,
+                 GOLD);
+    }
 }

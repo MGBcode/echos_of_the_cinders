@@ -4,7 +4,6 @@
 #include "enemy.h"
 #include "menu.h"
 #include "timer.h"
-#include "config.h"
 
 #include <stdio.h>
 #include <math.h>
@@ -57,8 +56,8 @@ static void DrawBossHUD(const Boss *boss) {
 
 static void ResetJogo(Player *cavaleiro,
                       Boss *boss,
-                      Level *level,
-                      TrainingDummy *dummy)
+                      TrainingDummy *dummy,
+                      Level *level)
 {
     level_carregar_sala(level, SALA_TREINO);
     level_atualizar_tile(level);
@@ -67,16 +66,16 @@ static void ResetJogo(Player *cavaleiro,
                2.5f,
                ALTURA_MAPA / 2.0f,
                level);
-    
+
     TrainingDummy_Init(dummy,
-                       LARGURA_MAPA / 2.0f,
-                       ALTURA_MAPA / 2.0f,
+                       7.5f,
+                       ALTURA_MAPA / 2.0f + 0.5f,
                        level);
 }
 
 int main(void) {
 
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
 
     InitWindow(800, 600, "Echos of the Cinders");
 
@@ -93,8 +92,8 @@ int main(void) {
 
     ResetJogo(&cavaleiro,
               &boss,
-              &level,
-              &dummy);
+              &dummy,
+              &level);
 
     TimerData timer;
 
@@ -108,7 +107,6 @@ int main(void) {
     int lastScreenHeight = GetScreenHeight();
 
     bool lastHitboxActive = false;
-    bool lastBossAttackActive = false;
 
     bool isPaused = false;
     bool lastCKeyPressed = false;
@@ -119,6 +117,9 @@ int main(void) {
     while (!WindowShouldClose()) {
 
         float dt = GetFrameTime();
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            break;
+        }
         bool currentCKeyPressed = IsKeyPressed(KEY_C);
         if (currentCKeyPressed && !lastCKeyPressed) {
             isPaused = !isPaused;
@@ -135,9 +136,15 @@ int main(void) {
 
             cavaleiro.pos.x = cavaleiro.tile_pos.x * level.tamanho_tile;
             cavaleiro.pos.y = cavaleiro.tile_pos.y * level.tamanho_tile_h;
-            
-            boss.pos.x = (boss.pos.x / lastScreenWidth) * GetScreenWidth();
-            boss.pos.y = (boss.pos.y / lastScreenHeight) * GetScreenHeight();
+
+            if (gameState == STATE_BOSS) {
+                boss.pos.x = (boss.pos.x / lastScreenWidth) * GetScreenWidth();
+                boss.pos.y = (boss.pos.y / lastScreenHeight) * GetScreenHeight();
+            }
+
+            dummy.pos.x = dummy.tile_pos.x * level.tamanho_tile;
+            dummy.pos.y = dummy.tile_pos.y * level.tamanho_tile_h;
+
 
             lastScreenWidth = GetScreenWidth();
             lastScreenHeight = GetScreenHeight();
@@ -158,8 +165,8 @@ int main(void) {
 
                 ResetJogo(&cavaleiro,
                           &boss,
-                          &level,
-                          &dummy);
+                          &dummy,
+                          &level);
 
                 level_atualizar_tile(&level);
 
@@ -168,7 +175,6 @@ int main(void) {
                 bossJaMorreu = false;
 
                 lastHitboxActive = false;
-                lastBossAttackActive = false;
 
                 gameState = STATE_TREINO;
             }
@@ -189,8 +195,7 @@ int main(void) {
 
             EndDrawing();
 
-            if (IsKeyPressed(KEY_ESCAPE) ||
-                IsKeyPressed(KEY_ENTER))
+            if (IsKeyPressed(KEY_ENTER))
             {
                 gameState = STATE_MENU;
             }
@@ -199,19 +204,39 @@ int main(void) {
 
         case STATE_TREINO: {
 
+            if (IsKeyPressed(KEY_UP)) {
+                dummy.raio += 1.0f;
+            }
+
+            if (IsKeyPressed(KEY_DOWN)) {
+                dummy.raio -= 1.0f;
+                if (dummy.raio < 5.0f) dummy.raio = 5.0f;
+            }
+
+            if (dummy.hitFlashTimer > 0.0f)
+                dummy.hitFlashTimer -= dt;
+
             UpdatePlayer(&cavaleiro,
                          dt,
                          &level);
-            
-            TrainingDummy_Update(&dummy, dt);
 
             bool hitNow =
                 cavaleiro.isHitboxActive;
 
             if (hitNow &&
-                !lastHitboxActive)
+                !lastHitboxActive &&
+                dummy.alive)
             {
-                // Combat handling will be added here
+                if (CheckCollisionCircles(
+                        cavaleiro.hitboxCenter,
+                        cavaleiro.hitboxRadius,
+                        dummy.pos,
+                        dummy.raio))
+                {
+                    TrainingDummy_TakeDamage(
+                        &dummy,
+                        10);
+                }
             }
 
             lastHitboxActive = hitNow;
@@ -220,21 +245,6 @@ int main(void) {
                 level_get_tile(&level,
                                cavaleiro.pos.x,
                                cavaleiro.pos.y);
-
-            // Collision with training dummy
-            if (dummy.alive && cavaleiro.isHitboxActive) {
-                if (CheckCollisionCircles(cavaleiro.hitboxCenter,
-                                         cavaleiro.hitboxRadius,
-                                         dummy.pos,
-                                         dummy.raio)) {
-                    dummy.hp -= 10;
-                    if (dummy.hp <= 0) {
-                        dummy.hp = 0;
-                        dummy.alive = false;
-                    }
-                    dummy.hitFlashTimer = 0.1f;
-                }
-            }
 
             if (tileAtual == TILE_PORTA) {
                 float doorTileX = LARGURA_MAPA - 1.5f;
@@ -271,7 +281,8 @@ int main(void) {
 
                             level.tamanho_tile_h *
                             (ALTURA_MAPA / 2)
-                        });
+                        },
+                        &level);
 
                     Timer_Start(&timer);
 
@@ -290,6 +301,7 @@ int main(void) {
             level_desenhar(&level);
 
             DrawPlayer(cavaleiro);
+
             TrainingDummy_Draw(&dummy);
 
             DrawPlayerHUD(&cavaleiro,
@@ -301,11 +313,8 @@ int main(void) {
                      110,
                      18,
                      DARKGRAY);
-            
-            // FPS Display
-            char fpsTxt[32];
-            snprintf(fpsTxt, sizeof(fpsTxt), "FPS: %d", GetFPS());
-            DrawText(fpsTxt, 10, GetScreenHeight() - 30, 14, DARKGREEN);
+
+            DrawFPS(GetScreenWidth() - 100, 10);
 
             EndDrawing();
 
@@ -378,30 +387,7 @@ int main(void) {
 
                 lastHitboxActive = hitNow;
 
-                AttackCircle bossAtk;
-                bool bossAtkActive =
-                    Boss_GetAttackCircle(
-                        &boss,
-                        &bossAtk);
-
-                if (bossAtkActive &&
-                    !lastBossAttackActive &&
-                    cavaleiro.hp > 0)
-                {
-                    if (CheckCollisionCircles(
-                            bossAtk.center,
-                            bossAtk.radius,
-                            cavaleiro.pos,
-                            cavaleiro.raio))
-                    {
-                        PlayerTakeDamage(
-                            &cavaleiro,
-                            bossAtk.damage);
-                    }
-                }
-
-                lastBossAttackActive =
-                    bossAtkActive;
+                (void)Boss_GetAttackCircle(&boss, NULL);
             }
 
             if (bossJaMorreu) {

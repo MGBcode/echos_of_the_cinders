@@ -1,31 +1,19 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ============================================
-// Window Configuration
-// ============================================
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define WINDOW_TITLE "Echos of the Cinders"
 #define TARGET_FPS 60
 
-// ============================================
-// Level Configuration
-// ============================================
 #define LARGURA_MAPA 25
 #define ALTURA_MAPA 19
 
-// ============================================
-// Score System Configuration
-// ============================================
 #define MAX_SCORES 10
 #define MAX_SCORE_NAME 3
 #define SCORE_FILE "scores.txt"
 #define MIN_VALID_TIME 1.0f
 
-// ============================================
-// Player Configuration
-// ============================================
 #define PLAYER_HP_MAX 100
 #define PLAYER_STAMINA_MAX 100.0f
 #define PLAYER_STAMINA_RECOVERY_DELAY 1.5f
@@ -33,21 +21,12 @@
 #define DASH_COST 15.0f
 #define ATTACK_COST 22.5f
 
-// ============================================
-// Boss Configuration
-// ============================================
 #define BOSS_HP_MAX 200
 #define BOSS_INITIAL_PHASE 1
 
-// ============================================
-// Test Dummy Configuration
-// ============================================
 #define DUMMY_DAMAGE_PER_HIT 10
 #define DUMMY_HP_INFINITE 999999
 
-// ============================================
-// HUD Configuration
-// ============================================
 #define HUD_OFFSET_X 10
 #define HUD_OFFSET_Y 10
 

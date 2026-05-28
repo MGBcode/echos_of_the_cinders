@@ -159,3 +159,221 @@ explicacoes.txt = documenta as mudanças recentes no projeto seguindo o estilo d
 - deltaTime (dt): Garante que a velocidade do Boss e seus 
   ataques sejam consistentes independente do FPS.
 ============================================================
+
+============================================================
+MÓDULO DE SALA DE TREINO (level.h e level.c - DETALHADO)
+============================================================
+OBJETIVO: Gerenciar a disposição das salas do jogo, colisões e ambiente responsivo.
+
+ESTRUTURA SALA_TREINO:
+    - Dimensões: 25 colunas × 19 linhas de tiles
+    - Parede de proteção nas bordas (impede sair da arena)
+    - Dummy de treinamento posicionado no centro para praticar combos
+    - Porta de saída localizada à direita (transição para SALA_BOSS)
+
+ESTRUTURA SALA_BOSS:
+    - Arena de combate contra o chefe
+    - Porta bloqueada até o Boss ser derrotado
+    - Maior espaço para movimentação em combate
+
+TIPOS DE TILES:
+    - TILE_VAZIO: Bloco vazio, totalmente passável
+    - TILE_PAREDE: Parede sólida nas bordas do mapa
+    - TILE_BLOCO: Obstáculo/bloco colisível (pode ser removido para simplificar layout)
+    - TILE_PORTA: Porta/saída de transição entre salas
+
+VARIÁVEIS E FUNÇÕES PRINCIPAIS:
+
+    tamanho_tile = Armazena o tamanho em pixels de cada tile. Calculado dinamicamente
+                   para que o mapa sempre preencha 100% da tela sem deformação.
+    
+    grade[ALTURA_MAPA][LARGURA_MAPA] = Matriz 2D que representa a planta baixa da sala.
+                                        Cada posição contém um TipeTile indicando tipo do bloco.
+
+    level_iniciar() = Função de setup. Varre a matriz inteira e preenche com valores iniciais
+                      (bordas = paredes, miolo = vazio). Define a primeira sala como SALA_TREINO.
+
+    level_atualizar_tile() = Recalcula tamanho_tile baseado na resolução atual da tela.
+                             Essencial ao redimensionar a janela para manter responsividade.
+                             Fórmula: tamanho_tile = screenWidth / LARGURA_MAPA
+
+    level_desenhar() = Renderiza todos os tiles na tela a cada frame. Percorre a matriz
+                       e usa DrawRectangle com cores diferentes para cada tipo de tile.
+
+    level_pode_mover(pos, raio) = Verifica colisão entre uma posição circular (pos + raio)
+                                  e os tiles sólidos (PAREDE, BLOCO). Retorna verdadeiro se
+                                  o movimento é permitido, falso se há obstrução.
+
+    level_carregar_sala(sala) = Carrega o layout de uma sala específica. Modifica a grade
+                                de acordo com a sala solicitada (SALA_TREINO ou SALA_BOSS).
+                                Recalcula tamanho_tile ao mudar de sala.
+
+    level_abrir_saida_boss() = Desbloqueando a porta de saída quando o Boss é derrotado.
+                               Muda o TILE_PORTA de bloqueado para passável.
+
+DUMMY DE TREINAMENTO:
+    - Posição fixa no centro da SALA_TREINO
+    - Raio: 50px (25px Player < 50px Dummy < 70px Boss)
+    - HP infinito (999999) para treinar ataques ilimitadamente
+    - Não se move nem contra-ataca, apenas recebe dano
+    - Útil para testar combos, timing e dano de ataques
+
+============================================================
+MÓDULO DE MENU (menu.h e menu.c)
+============================================================
+OBJETIVO: Gerenciar a interface do usuário, navegação entre telas e exibição do ranking.
+
+ESTRUTURA DO MENU:
+
+TELA PRINCIPAL (Menu_DrawPrincipal):
+    - Título do jogo centralizado no topo
+    - Botão "JOGAR" - Inicia o jogo na SALA_TREINO
+    - Botão "MELHORES TEMPOS" - Exibe o ranking dos top 10 jogadores
+    - Efeito hover nos botões (mudam de cor ao passar o mouse)
+
+TELA DE RANKING (Menu_DrawRecordes):
+    - Exibe os 10 melhores tempos do arquivo scores.txt
+    - Mostra: Posição (1-10), Nome do jogador (3 iniciais) e Tempo em segundos
+    - Ordenado de forma ascendente (menor tempo = melhor = primeira posição)
+    - Botão "VOLTAR" para retornar à tela principal
+
+TELA DE DERROTA (Menu_DrawDerrota):
+    - Fundo vermelho indicando morte do jogador
+    - Mensagem "VOCÊ PERDEU"
+    - Oferece opção de tentar novamente ou voltar ao menu
+
+TELA DE AGRADECIMENTO (Menu_DrawAgradecimento):
+    - Fundo dourado indicando vitória
+    - Mensagem de parabéns ao derrotar o Boss
+    - Pede as 3 iniciais do nome do jogador para salvar no ranking
+    - Campo de input para digitar nome e salvar tempo
+
+VARIÁVEIS PRINCIPAIS:
+
+    isHovering = Flag que detecta se o mouse está sobre um botão.
+                 Usada para mudar a cor do botão como feedback visual.
+
+    MouseX, MouseY = Coordenadas atuais do mouse obtidas via GetMouseX/GetMouseY.
+                     Usadas para detectar clique nos botões.
+
+    selectedInitial = Índice do caractere atualmente selecionado no input do nome.
+    playerInitials[3] = Array de caracteres para armazenar as 3 iniciais do nome.
+
+FUNÇÕES PRINCIPAIS:
+
+    Menu_DrawPrincipal() = Renderiza a tela inicial com titulo, botões JOGAR e MELHORES TEMPOS.
+                           Detecta cliques e retorna transição de estado para TREINO ou RECORDES.
+
+    Menu_DrawRecordes() = Exibe os 10 melhores tempos do ranking.
+                          Carrega dados de scores.txt usando LoadScores().
+                          Permite retornar à tela principal.
+
+    Menu_DrawDerrota() = Exibe tela de morte com fundo vermelho.
+                         Oferece reiniciar ou voltar ao menu.
+
+    Menu_DrawAgradecimento() = Exibe tela de vitória com fundo dourado.
+                               Interface para digitar 3 iniciais do nome.
+                               Valida input e prepara para salvar tempo.
+
+INTERAÇÕES DO USUÁRIO:
+
+    Botões: Clique do mouse para ativar ações (JOGAR, RECORDES, VOLTAR, REINICIAR)
+    Input de Nome: Teclado para digitar até 3 caracteres alfanuméricos
+    Navegação: Transições entre telas baseadas em estados de jogo
+
+============================================================
+MÓDULO DE TIMER (timer.h e timer.c)
+============================================================
+OBJETIVO: Gerenciar cronômetro in-game, persistência de scores e ranking de leaderboard.
+
+COMPONENTES PRINCIPAIS:
+
+CRONÔMETRO IN-GAME (timer.c):
+    - Inicia quando o jogador entra na SALA_TREINO
+    - Para quando o Boss é derrotado (vitória)
+    - Exibido em HUD no canto superior direito durante gameplay
+    - Formato: "Tempo: X.XXs" (segundos com 2 casas decimais)
+
+SISTEMA DE PONTUAÇÃO:
+
+    MIN_VALID_TIME = 1.0f
+        Constante que rejeita tempos muito curtos (< 1 segundo).
+        Previne exploits onde jogador derrotasse o Boss instantaneamente.
+
+    MAX_SCORES = 10
+        Número máximo de posições no ranking. Apenas os top 10 tempos são salvos.
+
+    Score (Struct):
+        - initialName[3] = Iniciais do nome do jogador
+        - time = Tempo em segundos (float) com precisão de centésimos
+
+ARQUIVO DE PERSISTÊNCIA (scores.txt):
+    - Localização: raiz do projeto
+    - Formato de linha: "XXX Y.YY\n"
+        * XXX = 3 caracteres de iniciais (ex: "ABC")
+        * Y.YY = Número float com até 2 casas decimais (ex: "123.45")
+        * \n = Quebra de linha após cada entrada
+
+    - Exemplo conteúdo:
+        ABC 45.32
+        XYZ 67.89
+        DEF 50.12
+
+FUNÇÕES DE GERENCIAMENTO:
+
+    SaveScore(const char initialName[3], float time)
+        = Salva um novo score se:
+          1. O tempo é válido (>= MIN_VALID_TIME)
+          2. Carrega scores existentes de scores.txt
+          3. Insere o novo score na posição correta (ordenação ascendente)
+          4. Mantém apenas os top 10 (remove posição 11 se houver)
+          5. Reescreve o arquivo scores.txt com array atualizado
+        
+        Parâmetros:
+            - initialName: Ponteiro para array de 3 caracteres com iniciais
+            - time: Tempo em segundos (float)
+
+    LoadScores(Score scores[], int *count)
+        = Carrega scores existentes de scores.txt:
+          1. Abre arquivo em modo leitura
+          2. Percorre linhas e extrai iniciais + tempo
+          3. Preenche array 'scores' com dados ordenados
+          4. Armazena quantidade de scores lidos em 'count'
+          5. Fecha arquivo
+        
+        Parâmetros:
+            - scores: Array de Score para armazenar dados lidos
+            - count: Ponteiro para inteiro que receberá quantidade de scores
+
+    ResetTimer()
+        = Reinicia o cronômetro para zero. Chamado ao entrar em SALA_TREINO.
+
+    UpdateTimer(float deltaTime)
+        = Incrementa o cronômetro baseado em deltaTime.
+          Chamado a cada frame dentro de UPDATE_TREINO.
+
+    GetElapsedTime()
+        = Retorna o tempo decorrido em segundos.
+          Usado em HUD e ao derrotar o Boss.
+
+FLUXO DE JOGO:
+
+    1. Jogador clica JOGAR na tela principal
+    2. Estado muda para STATE_TREINO
+    3. ResetTimer() é chamado
+    4. Cronômetro incrementa a cada frame
+    5. Jogador treina e derrota o Boss
+    6. Estado muda para STATE_AGRADECIMENTO
+    7. GetElapsedTime() fornece o tempo final
+    8. Jogador digita 3 iniciais
+    9. SaveScore() registra o novo tempo no ranking
+    10. Tela de RECORDES mostra posição (ou não, se fora do top 10)
+
+VALIDAÇÃO E SEGURANÇA:
+
+    - Tempos < 1.0s são rejeitados automaticamente
+    - Array de scores mantém apenas top 10
+    - Arquivo scores.txt é lido/escrito apenas quando necessário
+    - Proteção contra corrupção de dados (formato fixo XXX Y.YY)
+
+============================================================

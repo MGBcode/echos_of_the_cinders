@@ -2,9 +2,6 @@
 #include "timer.h"
 #include <stdio.h>
 
-// ============================================
-// Helper Functions - UI
-// ============================================
 static bool DrawBotao(Rectangle rect, const char *texto) {
     Vector2 mouse = GetMousePosition();
     bool hover = CheckCollisionPointRec(mouse, rect);
@@ -25,9 +22,6 @@ static bool DrawBotao(Rectangle rect, const char *texto) {
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
-// ============================================
-// Main Menu Drawing
-// ============================================
 MenuOpcao Menu_DrawPrincipal(void) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -63,9 +57,6 @@ MenuOpcao Menu_DrawPrincipal(void) {
     return MENU_OPCAO_NENHUMA;
 }
 
-// ============================================
-// Defeat Screen Drawing
-// ============================================
 void Menu_DrawDerrota(void) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -89,9 +80,6 @@ void Menu_DrawDerrota(void) {
     DrawText(instrucao, (sw - instrW) / 2, sh * 2 / 3, instrSize, (Color){160, 160, 160, 255});
 }
 
-// ============================================
-// Thank You Screen Drawing
-// ============================================
 void Menu_DrawAgradecimento(void) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -121,9 +109,6 @@ void Menu_DrawAgradecimento(void) {
     DrawText(instrucao, (sw - instrW) / 2, sh * 2 / 3, instrSize, (Color){160, 160, 160, 255});
 }
 
-// ============================================
-// High Scores Display
-// ============================================
 void Menu_DrawRecordes(void)
 {
     ClearBackground(BLACK);

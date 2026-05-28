@@ -28,6 +28,9 @@ void level_carregar_sala(Level *level, SalaId sala) {
         level->grade[ALTURA_MAPA / 2][LARGURA_MAPA - 2] = TILE_PORTA;
 
     } else if (sala == SALA_BOSS) {
+        // Saida do boss comeca FECHADA (parede) e so vira porta quando o boss morrer.
+        // Coordenada alinhada com a checagem de porta em main.c.
+        level->grade[ALTURA_MAPA / 2][LARGURA_MAPA - 2] = TILE_PAREDE;
     }
 
     level_atualizar_tile(level);
@@ -86,7 +89,7 @@ void level_desenhar(Level *level) {
     if (level->salaAtual == SALA_TREINO) {
         DrawText("ARENA ->", portaPixelX - 80, portaPixelY, 14, (Color){80, 220, 80, 255});
     } else if (level->salaAtual == SALA_BOSS) {
-        TipeTile portaSaida = level->grade[portaTileY][LARGURA_MAPA - 1];
+        TipeTile portaSaida = level->grade[portaTileY][LARGURA_MAPA - 2];
         if (portaSaida == TILE_PORTA) {
             DrawText("SAIDA ->", portaPixelX - 80, portaPixelY, 14, (Color){80, 220, 80, 255});
         } else {
