@@ -4,6 +4,11 @@
 #include "raylib.h"
 #include "level.h"
 
+typedef enum {
+    PLAYER_STATE_IDLE,
+    PLAYER_STATE_HEAVY_ATTACK
+} PlayerState;
+
 typedef struct {
     Vector2 pos;
     Vector2 tile_pos;
@@ -21,6 +26,9 @@ typedef struct {
     int lastVerticalInput;
     float diagonalBufferTimer;
     int comboStep;
+    PlayerState state;
+    float heavyChargeTimer;
+    bool isChargingHeavy;
     int attackState;
     float attackStateTimer;
     float attackWindup[3];
@@ -45,6 +53,9 @@ typedef struct {
     float staminaRecoveryDelay;
     float staminaRecoveryDelayCounter;
     float staminaRecoveryRate;
+    float baseStaminaRecoveryDelay;
+    float baseStaminaRecoveryRate;
+    bool isExhausted;
     bool alive;
 } Player;
 

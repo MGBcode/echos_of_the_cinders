@@ -48,12 +48,18 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->staminaMax = 100.0f;
     player->stamina = player->staminaMax;
     player->staminaRecoveryDelay = 1.5f;
+    player->baseStaminaRecoveryDelay = 1.5f;
     player->staminaRecoveryDelayCounter = 0.0f;
     player->staminaRecoveryRate = 25.0f;
+    player->baseStaminaRecoveryRate = 25.0f;
+    player->isExhausted = false;
     player->frascosMax = 3;
     player->frascosAtuais = 3;
     player->isHealing = false;
     player->healingTimer = 0.0f;
+    player->state = PLAYER_STATE_IDLE;
+    player->heavyChargeTimer = 0.0f;
+    player->isChargingHeavy = false;
     player->alive = true;
 }
 
@@ -144,6 +150,63 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->diagonalBufferTimer = 0;
     }
 
+    if (IsKeyPressed(KEY_E) && player->attackState == 0 && !player->isDashing && !player->isHealing && !player->isParrying) {
+        player->state = PLAYER_STATE_HEAVY_ATTACK;
+        player->isChargingHeavy = true;
+        player->heavyChargeTimer = 0.0f;
+    }
+
+    if (player->isChargingHeavy) {
+        if (IsKeyDown(KEY_E)) {
+            player->heavyChargeTimer += deltaTime;
+                if (player->heavyChargeTimer >= 2.5f) {
+                    player->heavyChargeTimer = 2.5f;
+                    float cost = 60.0f;
+                    player->stamina -= cost;
+                    if (player->stamina < 0.0f) player->stamina = 0.0f;
+                    player->staminaRecoveryDelayCounter = 0.0f;
+                    if (player->stamina == 0.0f) {
+                        player->isExhausted = true;
+                        player->staminaRecoveryDelay = 2.0f;
+                        player->staminaRecoveryRate = 20.0f;
+                    }
+                    player->isChargingHeavy = false;
+                    player->state = PLAYER_STATE_IDLE;
+                    player->attackState = 1;
+                    player->attackStateTimer = 0.0f;
+                    player->comboStep = 4;
+                    player->isHitboxActive = false;
+                    player->hasHitEnemy = false;
+                }
+            }
+
+            if (IsKeyReleased(KEY_E) && player->isChargingHeavy) {
+                float cost;
+                if (player->heavyChargeTimer >= 2.5f) {
+                    cost = 60.0f;
+                } else if (player->heavyChargeTimer >= 1.0f) {
+                    float fator = (player->heavyChargeTimer - 1.0f) / 1.5f;
+                    if (fator < 0.0f) fator = 0.0f;
+                    if (fator > 1.0f) fator = 1.0f;
+                    cost = 25.0f + (fator * 35.0f);
+                } else {
+                    cost = 25.0f;
+                }
+                player->stamina -= cost;
+                if (player->stamina < 0.0f) player->stamina = 0.0f;
+                player->staminaRecoveryDelayCounter = 0.0f;
+                if (player->stamina == 0.0f) {
+                    player->isExhausted = true;
+                    player->staminaRecoveryDelay = 2.0f;
+                    player->staminaRecoveryRate = 20.0f;
+                }
+            player->attackStateTimer = 0.0f;
+            player->comboStep = 4;
+            player->isHitboxActive = false;
+            player->hasHitEnemy = false;
+        }
+    }
+
     if (IsKeyPressed(KEY_SPACE) && !player->isDashing && player->cooldownTimeCounter <= 0.0f && (staminaInfinite || player->stamina >= 15.0f)) {
         player->attackState = 0;
         player->attackStateTimer = 0.0f;
@@ -218,15 +281,24 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     }
 
     if (player->attackState == 1) {
-        
         player->attackStateTimer += deltaTime;
-        float windup = player->attackWindup[player->comboStep - 1];
+        float windup;
+        if (player->comboStep == 4) {
+            if (player->heavyChargeTimer >= 1.0f) {
+                windup = 0.0f;
+            } else {
+                windup = 1.0f;
+            }
+        } else {
+            windup = player->attackWindup[player->comboStep - 1];
+        }
+
         if (player->attackStateTimer >= windup) {
-            player->attackState = 2; 
+            player->attackState = 2;
             player->attackStateTimer = 0.0f;
             player->isHitboxActive = true;
             player->hasHitEnemy = false;
-            
+
             float distFront = 0.0f;
             if (player->comboStep == 1 || player->comboStep == 2) {
                 player->hitboxRadius = tw * 0.7f;
@@ -234,36 +306,58 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             } else if (player->comboStep == 3) {
                 player->hitboxRadius = tw * 0.3f;
                 distFront = tw * 0.8f;
+            } else if (player->comboStep == 4) {
+                float baseRadius = tw * 0.7f;
+                float charge = player->heavyChargeTimer;
+                if (charge >= 3.5f) {
+                    player->hitboxRadius = baseRadius * 1.30f;
+                } else if (charge >= 1.0f) {
+                    float fator = (charge - 1.0f) / 2.5f;
+                    if (fator < 0.0f) fator = 0.0f;
+                    if (fator > 1.0f) fator = 1.0f;
+                    player->hitboxRadius = baseRadius * (1.15f + fator * 0.15f);
+                } else {
+                    player->hitboxRadius = baseRadius * 1.15f;
+                }
+                distFront = tw * 0.4f;
             }
             player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
             player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
         }
     } else if (player->attackState == 2) {
-        
         player->attackStateTimer += deltaTime;
-        float active = player->attackActive[player->comboStep - 1];
-        
+        float active;
+        if (player->comboStep == 4) {
+            active = player->attackActive[0];
+        } else {
+            active = player->attackActive[player->comboStep - 1];
+        }
+
         float distFront = 0.0f;
         if (player->comboStep == 1 || player->comboStep == 2) {
             distFront = tw * 0.4f;
         } else if (player->comboStep == 3) {
             distFront = tw * 0.8f;
+        } else if (player->comboStep == 4) {
+            distFront = tw * 0.4f;
         }
         player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
         player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
 
-        
         if (player->attackStateTimer >= active) {
-            player->attackState = 3; 
+            player->attackState = 3;
             player->attackStateTimer = 0.0f;
             player->isHitboxActive = false;
         }
     } else if (player->attackState == 3) {
-        
         player->attackStateTimer += deltaTime;
-        float recovery = player->attackRecovery[player->comboStep - 1];
+        float recovery;
+        if (player->comboStep == 4) {
+            recovery = player->attackRecovery[0];
+        } else {
+            recovery = player->attackRecovery[player->comboStep - 1];
+        }
         if (player->attackStateTimer >= recovery) {
-            
             player->attackState = 0;
             player->attackStateTimer = 0.0f;
             player->comboStep = 0;
@@ -379,14 +473,17 @@ void PlayerUseStamina(Player *player, float amount) {
 }
 
 void UpdatePlayerStamina(Player *player, float deltaTime) {
-    
     if (player->staminaRecoveryDelayCounter < player->staminaRecoveryDelay) {
         player->staminaRecoveryDelayCounter += deltaTime;
     } else {
-        
         player->stamina += player->staminaRecoveryRate * deltaTime;
         if (player->stamina > player->staminaMax) {
             player->stamina = player->staminaMax;
+            if (player->isExhausted) {
+                player->isExhausted = false;
+                player->staminaRecoveryDelay = player->baseStaminaRecoveryDelay;
+                player->staminaRecoveryRate = player->baseStaminaRecoveryRate;
+            }
         }
     }
 }
@@ -428,7 +525,8 @@ void DrawPlayerHUD(const Player *player, int x, int y) {
     if (staminaRatio > 1.0f) staminaRatio = 1.0f;
     
     int staminaFillW = (int)(barW * staminaRatio);
-    DrawRectangle(x + 1, staminaBarY + 1, staminaFillW - 2 > 0 ? staminaFillW - 2 : 0, barH - 2, YELLOW);
+    Color staminaFillColor = player->isExhausted ? RED : YELLOW;
+    DrawRectangle(x + 1, staminaBarY + 1, staminaFillW - 2 > 0 ? staminaFillW - 2 : 0, barH - 2, staminaFillColor);
 
     DrawText(TextFormat("Curas: %d/%d", player->frascosAtuais, player->frascosMax),
              x,
