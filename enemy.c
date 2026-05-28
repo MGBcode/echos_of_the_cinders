@@ -89,7 +89,7 @@ void Boss_Init(Boss *b, Vector2 startPos, Level *level) {
     b->sizeScale = level->tamanho_tile / 32.0f;
     b->raio = 28.0f * b->sizeScale;
 
-    b->hpMax = 200;
+    b->hpMax = 300;
     b->hp = b->hpMax;
 
     b->state = BOSS_OBSERVE;
@@ -154,7 +154,7 @@ void Boss_Init(Boss *b, Vector2 startPos, Level *level) {
     b->aoeWindup = 1.80f;
     b->aoeActive = 0.55f;
     b->aoeRecovery = 1.30f;
-    b->aoeRadius = 180.0f * b->sizeScale;
+    b->aoeRadius = 198.0f * b->sizeScale;
     b->aoeDamage = 70;
 
     b->projectilesHead = NULL;
@@ -463,56 +463,102 @@ void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
 
         case BOSS_ATTACK_TYPE_HEAVY: {
             float baseWindup = GetPhaseWindup(b, b->heavyWindup);
-            float perHit = b->heavyWindup + b->heavyActive + b->heavyRecovery;
-            int currentHit = (int)(b->stateTimer / perHit);
-            if (currentHit >= b->heavyMaxHits) currentHit = b->heavyMaxHits - 1;
-            float localT = fmodf(b->stateTimer, perHit);
-            float prevTimer = b->stateTimer - dt;
-            float localPrevT = (prevTimer > 0.0f) ? fmodf(prevTimer, perHit) : 0.0f;
-            windupEnd = (currentHit == 0) ? baseWindup : b->heavyWindup * 0.7f;
-            activeEnd = windupEnd + b->heavyActive;
-            totalEnd = perHit * b->heavyMaxHits;
+            float hit1Windup = baseWindup;
+            float hit1Active = b->heavyActive;
+            float hit1Recovery = b->heavyRecovery;
+            float dashDuration = 0.25f;
+            float hit2Windup = baseWindup * 0.25f;
+            float hit2Active = b->heavyActive;
+            float hit2Recovery = b->heavyRecovery;
+
+            float hit1End = hit1Windup + hit1Active + hit1Recovery;
+            float dashEnd = hit1End + dashDuration;
+            float hit2End = dashEnd + hit2Windup + hit2Active + hit2Recovery;
+            totalEnd = hit2End;
             cooldown = GetAttackCooldown(b, 1.35f);
 
-            if (currentHit != b->heavyHitIndex) {
-                b->heavyHitIndex = currentHit;
-                b->hasHitPlayerThisAttack = false;
-            }
+            float prevTimer = b->stateTimer - dt;
 
-            if (localT < windupEnd) {
-                b->lockedTargetPos = playerPos;
-                b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
-            }
+            if (b->stateTimer < hit1End) {
+                if (b->stateTimer < hit1Windup) {
+                    b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                }
 
-            int currentDamage = (currentHit == 0) ? b->heavyDamage1 : b->heavyDamage2;
-            if (currentHit < b->heavyMaxHits && localT >= windupEnd && localT < activeEnd) {
-                if (currentHit == 1 && localT < windupEnd) {
-                    Vector2 advance = Vector2Scale(b->attackDir, 320.0f * dt);
-                    MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
-                } else if (localPrevT < windupEnd) {
+                if (b->stateTimer >= hit1Windup && b->stateTimer < hit1Windup + hit1Active) {
                     Vector2 advance = Vector2Scale(b->attackDir, 220.0f * dt);
                     MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
-                }
-                if (!b->hasHitPlayerThisAttack) {
                     b->atk.active = true;
-                    b->atk.damage = currentDamage;
+                    b->atk.damage = b->heavyDamage1;
                     b->atk.radius = b->heavyHitRadius;
                     b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
-                    if (CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                    if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
                         b->hasHitPlayerThisAttack = true;
                         if (player->isParrying) {
                             b->atk.active = false;
                             b->state = BOSS_COOLDOWN;
                             b->stateTimer = GetAttackCooldown(b, 1.35f) * 1.75f;
-                            printf("[PARRY] Heavy Attack aparado! Boss em cooldown prolongado.\n");
+                            printf("[PARRY] Heavy 1/2 aparado! Boss em cooldown prolongado.\n");
                         } else {
                             PlayerTakeDamage(player, b->atk.damage);
-                            printf("[HIT] Heavy acertou o player: %d HP\n", currentDamage);
+                            printf("[HIT] Heavy 1/2 acertou o player: %d HP\n", b->heavyDamage1);
                         }
                     }
+                } else {
+                    b->atk.active = false;
+                }
+            } else if (b->stateTimer < dashEnd) {
+                if (prevTimer < hit1End) {
+                    b->hasHitPlayerThisAttack = false;
+                }
+
+                Vector2 dirToPlayer = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                b->attackDir = dirToPlayer;
+                Vector2 dashDelta = Vector2Scale(b->attackDir, 1400.0f * dt);
+                float remaining = Vector2Distance(b->pos, playerPos) - (b->raio + playerRadius + 20.0f);
+                if (remaining > 0.0f) {
+                    float step = Vector2Length(dashDelta);
+                    if (step > remaining) {
+                        dashDelta = Vector2Scale(b->attackDir, remaining);
+                    }
+                    MoveWithCollision(level, &b->pos, b->raio * 1.1f, dashDelta);
+                }
+                b->atk.active = false;
+            } else if (b->stateTimer < hit2End) {
+                float localT = b->stateTimer - dashEnd;
+                if (localT < hit2Windup) {
+                    b->attackDir = SafeNormalize(Vector2Subtract(playerPos, b->pos));
+                }
+
+                if (localT >= hit2Windup && localT < hit2Windup + hit2Active) {
+                    Vector2 advance = Vector2Scale(b->attackDir, 320.0f * dt);
+                    MoveWithCollision(level, &b->pos, b->raio * 1.1f, advance);
+                    b->atk.active = true;
+                    b->atk.damage = b->heavyDamage2;
+                    b->atk.radius = b->heavyHitRadius;
+                    b->atk.center = Vector2Add(b->pos, Vector2Scale(b->attackDir, b->heavyForwardOffset));
+                    if (!b->hasHitPlayerThisAttack && CheckCollisionCircles(b->atk.center, b->atk.radius, playerPos, playerRadius)) {
+                        b->hasHitPlayerThisAttack = true;
+                        if (player->isParrying) {
+                            b->atk.active = false;
+                            b->state = BOSS_COOLDOWN;
+                            b->stateTimer = GetAttackCooldown(b, 1.35f) * 1.75f;
+                            printf("[PARRY] Heavy 2/2 aparado! Boss em cooldown prolongado.\n");
+                        } else {
+                            PlayerTakeDamage(player, b->atk.damage);
+                            printf("[HIT] Heavy 2/2 acertou o player: %d HP\n", b->heavyDamage2);
+                        }
+                    }
+                } else {
+                    b->atk.active = false;
                 }
             } else {
                 b->atk.active = false;
+            }
+
+            if (b->stateTimer >= totalEnd) {
+                b->atk.active = false;
+                b->state = BOSS_COOLDOWN;
+                b->stateTimer = cooldown;
             }
         } break;
 

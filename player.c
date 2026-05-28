@@ -18,7 +18,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->tile_pos = (Vector2){ tileX, tileY };
     player->pos = (Vector2){ tileX * level->tamanho_tile, tileY * level->tamanho_tile_h };
     player->raio = level->tamanho_tile * 0.35f;
-    player->normalSpeed = 400.0f;
+    player->normalSpeed = 340.0f;
     player->isDashing = false;
     player->dashSpeedMultiplier = 4.0f;
     player->dashDuration = 0.20f;
@@ -62,7 +62,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     int th = level->tamanho_tile_h;
     bool staminaInfinite = (level->salaAtual == SALA_TREINO);
     player->raio = level->tamanho_tile * 0.35f;
-    player->normalSpeed = 400.0f;
+    player->normalSpeed = 340.0f;
     if (staminaInfinite) {
         player->stamina = player->staminaMax;
         player->staminaRecoveryDelayCounter = player->staminaRecoveryDelay;
