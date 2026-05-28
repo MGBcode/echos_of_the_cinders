@@ -159,39 +159,9 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     if (player->isChargingHeavy) {
         if (IsKeyDown(KEY_E)) {
             player->heavyChargeTimer += deltaTime;
-                if (player->heavyChargeTimer >= 2.5f) {
-                    player->heavyChargeTimer = 2.5f;
-                    float cost = 60.0f;
-                    player->stamina -= cost;
-                    if (player->stamina < 0.0f) player->stamina = 0.0f;
-                    player->staminaRecoveryDelayCounter = 0.0f;
-                    if (player->stamina == 0.0f) {
-                        player->isExhausted = true;
-                        player->staminaRecoveryDelay = 2.0f;
-                        player->staminaRecoveryRate = 20.0f;
-                    }
-                    player->isChargingHeavy = false;
-                    player->state = PLAYER_STATE_IDLE;
-                    player->attackState = 1;
-                    player->attackStateTimer = 0.0f;
-                    player->comboStep = 4;
-                    player->isHitboxActive = false;
-                    player->hasHitEnemy = false;
-                }
-            }
-
-            if (IsKeyReleased(KEY_E) && player->isChargingHeavy) {
-                float cost;
-                if (player->heavyChargeTimer >= 2.5f) {
-                    cost = 60.0f;
-                } else if (player->heavyChargeTimer >= 1.0f) {
-                    float fator = (player->heavyChargeTimer - 1.0f) / 1.5f;
-                    if (fator < 0.0f) fator = 0.0f;
-                    if (fator > 1.0f) fator = 1.0f;
-                    cost = 25.0f + (fator * 35.0f);
-                } else {
-                    cost = 25.0f;
-                }
+            if (player->heavyChargeTimer >= 2.5f) {
+                player->heavyChargeTimer = 2.5f;
+                float cost = 60.0f;
                 player->stamina -= cost;
                 if (player->stamina < 0.0f) player->stamina = 0.0f;
                 player->staminaRecoveryDelayCounter = 0.0f;
@@ -200,6 +170,39 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                     player->staminaRecoveryDelay = 2.0f;
                     player->staminaRecoveryRate = 20.0f;
                 }
+                player->isChargingHeavy = false;
+                player->state = PLAYER_STATE_IDLE;
+                player->attackState = 1;
+                player->attackStateTimer = 0.0f;
+                player->comboStep = 4;
+                player->isHitboxActive = false;
+                player->hasHitEnemy = false;
+            }
+        }
+
+        if (IsKeyReleased(KEY_E) && player->isChargingHeavy) {
+            float cost;
+            if (player->heavyChargeTimer >= 2.5f) {
+                cost = 60.0f;
+            } else if (player->heavyChargeTimer >= 1.0f) {
+                float fator = (player->heavyChargeTimer - 1.0f) / 1.5f;
+                if (fator < 0.0f) fator = 0.0f;
+                if (fator > 1.0f) fator = 1.0f;
+                cost = 25.0f + (fator * 35.0f);
+            } else {
+                cost = 25.0f;
+            }
+            player->stamina -= cost;
+            if (player->stamina < 0.0f) player->stamina = 0.0f;
+            player->staminaRecoveryDelayCounter = 0.0f;
+            if (player->stamina == 0.0f) {
+                player->isExhausted = true;
+                player->staminaRecoveryDelay = 2.0f;
+                player->staminaRecoveryRate = 20.0f;
+            }
+            player->isChargingHeavy = false;
+            player->state = PLAYER_STATE_IDLE;
+            player->attackState = 1;
             player->attackStateTimer = 0.0f;
             player->comboStep = 4;
             player->isHitboxActive = false;
@@ -309,15 +312,15 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             } else if (player->comboStep == 4) {
                 float baseRadius = tw * 0.7f;
                 float charge = player->heavyChargeTimer;
-                if (charge >= 3.5f) {
-                    player->hitboxRadius = baseRadius * 1.30f;
+                if (charge >= 2.5f) {
+                    player->hitboxRadius = baseRadius * 2.5f;
                 } else if (charge >= 1.0f) {
-                    float fator = (charge - 1.0f) / 2.5f;
+                    float fator = (charge - 1.0f) / 1.5f;
                     if (fator < 0.0f) fator = 0.0f;
                     if (fator > 1.0f) fator = 1.0f;
-                    player->hitboxRadius = baseRadius * (1.15f + fator * 0.15f);
+                    player->hitboxRadius = baseRadius * (2.0f + fator * 0.5f);
                 } else {
-                    player->hitboxRadius = baseRadius * 1.15f;
+                    player->hitboxRadius = baseRadius * 2.0f;
                 }
                 distFront = tw * 0.4f;
             }
