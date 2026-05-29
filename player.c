@@ -162,7 +162,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->heavyChargeTimer += deltaTime;
             if (player->heavyChargeTimer >= 2.5f) {
                 player->heavyChargeTimer = 2.5f;
-                player->currentAttackDamage = 40;
+                player->currentAttackDamage = 50;
                 float cost = 60.0f;
                 player->stamina -= cost;
                 if (player->stamina < 0.0f) player->stamina = 0.0f;
@@ -185,16 +185,16 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         if (IsKeyReleased(KEY_E) && player->isChargingHeavy) {
             float cost;
             if (player->heavyChargeTimer >= 2.5f) {
-                player->currentAttackDamage = 40;
+                player->currentAttackDamage = 50;
                 cost = 60.0f;
             } else if (player->heavyChargeTimer >= 1.0f) {
                 float fator = (player->heavyChargeTimer - 1.0f) / 1.5f;
                 if (fator < 0.0f) fator = 0.0f;
                 if (fator > 1.0f) fator = 1.0f;
-                player->currentAttackDamage = 20 + (int)(fator * 20.0f);
+                player->currentAttackDamage = 25 + (int)(fator * 25.0f);
                 cost = 25.0f + (fator * 35.0f);
             } else {
-                player->currentAttackDamage = 20;
+                player->currentAttackDamage = 25;
                 cost = 25.0f;
             }
             player->stamina -= cost;
@@ -306,6 +306,14 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->attackStateTimer = 0.0f;
             player->isHitboxActive = true;
             player->hasHitEnemy = false;
+
+            if (player->comboStep == 1) {
+                player->currentAttackDamage = 10;
+            } else if (player->comboStep == 2) {
+                player->currentAttackDamage = 10;
+            } else if (player->comboStep == 3) {
+                player->currentAttackDamage = 15;
+            }
 
             float distFront = 0.0f;
             if (player->comboStep == 1 || player->comboStep == 2) {
