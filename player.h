@@ -28,6 +28,7 @@ typedef struct {
     int comboStep;
     PlayerState state;
     float heavyChargeTimer;
+    int currentAttackDamage;
     bool isChargingHeavy;
     int attackState;
     float attackStateTimer;

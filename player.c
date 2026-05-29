@@ -59,6 +59,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->healingTimer = 0.0f;
     player->state = PLAYER_STATE_IDLE;
     player->heavyChargeTimer = 0.0f;
+    player->currentAttackDamage = 0;
     player->isChargingHeavy = false;
     player->alive = true;
 }
@@ -161,6 +162,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->heavyChargeTimer += deltaTime;
             if (player->heavyChargeTimer >= 2.5f) {
                 player->heavyChargeTimer = 2.5f;
+                player->currentAttackDamage = 40;
                 float cost = 60.0f;
                 player->stamina -= cost;
                 if (player->stamina < 0.0f) player->stamina = 0.0f;
@@ -183,13 +185,16 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         if (IsKeyReleased(KEY_E) && player->isChargingHeavy) {
             float cost;
             if (player->heavyChargeTimer >= 2.5f) {
+                player->currentAttackDamage = 40;
                 cost = 60.0f;
             } else if (player->heavyChargeTimer >= 1.0f) {
                 float fator = (player->heavyChargeTimer - 1.0f) / 1.5f;
                 if (fator < 0.0f) fator = 0.0f;
                 if (fator > 1.0f) fator = 1.0f;
+                player->currentAttackDamage = 20 + (int)(fator * 20.0f);
                 cost = 25.0f + (fator * 35.0f);
             } else {
+                player->currentAttackDamage = 20;
                 cost = 25.0f;
             }
             player->stamina -= cost;

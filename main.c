@@ -378,8 +378,7 @@ int main(void) {
                             boss.pos,
                             boss.raio))
                     {
-                        boss.hp -= 10;
-
+                        boss.hp -= cavaleiro.currentAttackDamage;
                         if (boss.hp < 0)
                             boss.hp = 0;
                     }
