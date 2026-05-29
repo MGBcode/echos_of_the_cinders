@@ -416,11 +416,20 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     float novo_x = player->pos.x + velX;
     float novo_y = player->pos.y + velY;
 
-    if (velX != 0.0f && PodeMoverPara(level, novo_x, player->pos.y, r, tw, th)) {
-        player->pos.x = novo_x;
+    if (velX != 0.0f) {
+        if (PodeMoverPara(level, novo_x, player->pos.y, r, tw, th)) {
+            player->pos.x = novo_x;
+        } else {
+            velX = 0.0f;
+        }
     }
-    if (velY != 0.0f && PodeMoverPara(level, player->pos.x, novo_y, r, tw, th)) {
-        player->pos.y = novo_y;
+
+    if (velY != 0.0f) {
+        if (PodeMoverPara(level, player->pos.x, novo_y, r, tw, th)) {
+            player->pos.y = novo_y;
+        } else {
+            velY = 0.0f;
+        }
     }
 
     player->tile_pos.x = player->pos.x / tw;

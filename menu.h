@@ -8,6 +8,7 @@ typedef enum GameState {
     STATE_MENU,
     STATE_TREINO,
     STATE_BOSS,
+    STATE_COMANDOS,
     STATE_DERROTA,
     STATE_AGRADECIMENTO,
 
@@ -21,11 +22,15 @@ typedef enum MenuOpcao {
 
     MENU_OPCAO_NENHUMA,
     MENU_OPCAO_JOGAR,
-    MENU_OPCAO_RECORDES
+    MENU_OPCAO_COMANDOS,
+    MENU_OPCAO_RECORDES,
+    MENU_OPCAO_SAIR
 
 } MenuOpcao;
 
 MenuOpcao Menu_DrawPrincipal(void);
+
+void Menu_DrawComandos(void);
 
 void Menu_DrawDerrota(void);
 

@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
+
+static void RestoreCursorOnExit(void) {
+    ShowCursor();
+}
 
 static void DrawBossHUD(const Boss *boss) {
     int screenW = GetScreenWidth();
@@ -79,6 +84,8 @@ int main(void) {
 
     InitWindow(800, 600, "Echos of the Cinders");
 
+    atexit(RestoreCursorOnExit);
+
     SetExitKey(KEY_NULL);
 
     SetTargetFPS(60);
@@ -109,22 +116,30 @@ int main(void) {
     bool lastHitboxActive = false;
 
     bool isPaused = false;
-    bool lastCKeyPressed = false;
+    bool shouldExit = false;
 
     char iniciais[4] = "";
     int letrasDigitadas = 0;
 
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !shouldExit) {
 
         float dt = GetFrameTime();
-        if (IsKeyPressed(KEY_ESCAPE)) {
-            break;
+        bool escPressed = IsKeyPressed(KEY_ESCAPE);
+        bool shiftDown = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+        if (shiftDown && escPressed) {
+            ShowCursor();
+            shouldExit = true;
+            continue;
         }
-        bool currentCKeyPressed = IsKeyPressed(KEY_C);
-        if (currentCKeyPressed && !lastCKeyPressed) {
+
+        if ((gameState == STATE_TREINO || gameState == STATE_BOSS) && IsKeyPressed(KEY_C)) {
             isPaused = !isPaused;
         }
-        lastCKeyPressed = currentCKeyPressed;
+
+        if (gameState != STATE_TREINO && gameState != STATE_BOSS) {
+            isPaused = false;
+        }
 
         if ((gameState == STATE_TREINO ||
              gameState == STATE_BOSS) &&
@@ -144,9 +159,6 @@ int main(void) {
 
             dummy.pos.x = dummy.tile_pos.x * level.tamanho_tile;
             dummy.pos.y = dummy.tile_pos.y * level.tamanho_tile_h;
-
-
-            lastScreenWidth = GetScreenWidth();
             lastScreenHeight = GetScreenHeight();
         }
 
@@ -176,6 +188,8 @@ int main(void) {
 
                 lastHitboxActive = false;
 
+                HideCursor();
+
                 gameState = STATE_TREINO;
             }
 
@@ -183,6 +197,17 @@ int main(void) {
                      MENU_OPCAO_RECORDES)
             {
                 gameState = STATE_RECORDES;
+            }
+
+            else if (opcao == MENU_OPCAO_COMANDOS)
+            {
+                gameState = STATE_COMANDOS;
+            }
+
+            else if (opcao == MENU_OPCAO_SAIR)
+            {
+                ShowCursor();
+                shouldExit = true;
             }
 
         } break;
@@ -195,8 +220,25 @@ int main(void) {
 
             EndDrawing();
 
-            if (IsKeyPressed(KEY_ENTER))
+            if (IsKeyPressed(KEY_ENTER) || escPressed)
             {
+                ShowCursor();
+                gameState = STATE_MENU;
+            }
+
+        } break;
+
+        case STATE_COMANDOS: {
+
+            BeginDrawing();
+
+            Menu_DrawComandos();
+
+            EndDrawing();
+
+            if (IsKeyPressed(KEY_ESCAPE))
+            {
+                ShowCursor();
                 gameState = STATE_MENU;
             }
 
@@ -204,93 +246,104 @@ int main(void) {
 
         case STATE_TREINO: {
 
-            if (IsKeyPressed(KEY_UP)) {
-                dummy.raio += 1.0f;
+            if (isPaused && escPressed) {
+                isPaused = false;
+                ShowCursor();
+                Timer_Reset(&timer);
+                gameState = STATE_MENU;
+                break;
             }
 
-            if (IsKeyPressed(KEY_DOWN)) {
-                dummy.raio -= 1.0f;
-                if (dummy.raio < 5.0f) dummy.raio = 5.0f;
-            }
+            if (!isPaused) {
 
-            if (dummy.hitFlashTimer > 0.0f)
-                dummy.hitFlashTimer -= dt;
-
-            UpdatePlayer(&cavaleiro,
-                         dt,
-                         &level);
-
-            bool hitNow =
-                cavaleiro.isHitboxActive;
-
-            if (hitNow &&
-                !lastHitboxActive &&
-                dummy.alive)
-            {
-                if (CheckCollisionCircles(
-                        cavaleiro.hitboxCenter,
-                        cavaleiro.hitboxRadius,
-                        dummy.pos,
-                        dummy.raio))
-                {
-                    TrainingDummy_TakeDamage(
-                        &dummy,
-                        10);
+                if (IsKeyPressed(KEY_UP)) {
+                    dummy.raio += 1.0f;
                 }
-            }
 
-            lastHitboxActive = hitNow;
+                if (IsKeyPressed(KEY_DOWN)) {
+                    dummy.raio -= 1.0f;
+                    if (dummy.raio < 5.0f) dummy.raio = 5.0f;
+                }
 
-            TipeTile tileAtual =
-                level_get_tile(&level,
-                               cavaleiro.pos.x,
-                               cavaleiro.pos.y);
+                if (dummy.hitFlashTimer > 0.0f)
+                    dummy.hitFlashTimer -= dt;
 
-            if (tileAtual == TILE_PORTA) {
-                float doorTileX = LARGURA_MAPA - 1.5f;
-                float doorTileY = ALTURA_MAPA / 2.0f;
-                float doorX = doorTileX * level.tamanho_tile;
-                float doorY = doorTileY * level.tamanho_tile_h;
-                
-                float distToDoor = sqrtf(
-                    (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
-                    (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
-                );
-                
-                float doorRadius = level.tamanho_tile * 1.2f;
-                
-                if (distToDoor < doorRadius) {
+                UpdatePlayer(&cavaleiro,
+                             dt,
+                             &level);
 
-                    level_carregar_sala(&level,
-                                        SALA_BOSS);
+                bool hitNow =
+                    cavaleiro.isHitboxActive;
 
-                    level_atualizar_tile(&level);
+                if (hitNow &&
+                    !lastHitboxActive &&
+                    dummy.alive)
+                {
+                    if (CheckCollisionCircles(
+                            cavaleiro.hitboxCenter,
+                            cavaleiro.hitboxRadius,
+                            dummy.pos,
+                            dummy.raio))
+                    {
+                        TrainingDummy_TakeDamage(
+                            &dummy,
+                            10);
+                    }
+                }
 
-                    cavaleiro.tile_pos.x = 2.5f;
-                    cavaleiro.tile_pos.y = ALTURA_MAPA / 2.0f + 0.5f;
-                    cavaleiro.pos.x =
-                        level.tamanho_tile * cavaleiro.tile_pos.x;
+                lastHitboxActive = hitNow;
 
-                    cavaleiro.pos.y =
-                        level.tamanho_tile_h * cavaleiro.tile_pos.y;
+                TipeTile tileAtual =
+                    level_get_tile(&level,
+                                   cavaleiro.pos.x,
+                                   cavaleiro.pos.y);
 
-                    Boss_Init(&boss,
-                        (Vector2){
-                            level.tamanho_tile *
-                            (LARGURA_MAPA * 3 / 4),
+                if (tileAtual == TILE_PORTA) {
+                    float doorTileX = LARGURA_MAPA - 1.5f;
+                    float doorTileY = ALTURA_MAPA / 2.0f;
+                    float doorX = doorTileX * level.tamanho_tile;
+                    float doorY = doorTileY * level.tamanho_tile_h;
+                    
+                    float distToDoor = sqrtf(
+                        (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
+                        (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
+                    );
+                    
+                    float doorRadius = level.tamanho_tile * 1.2f;
+                    
+                    if (distToDoor < doorRadius) {
 
-                            level.tamanho_tile_h *
-                            (ALTURA_MAPA / 2)
-                        },
-                        &level);
+                        level_carregar_sala(&level,
+                                            SALA_BOSS);
 
-                    Timer_Start(&timer);
+                        level_atualizar_tile(&level);
 
-                    bossJaMorreu = false;
+                        cavaleiro.tile_pos.x = 2.5f;
+                        cavaleiro.tile_pos.y = ALTURA_MAPA / 2.0f + 0.5f;
+                        cavaleiro.pos.x =
+                            level.tamanho_tile * cavaleiro.tile_pos.x;
 
-                    gameState = STATE_BOSS;
+                        cavaleiro.pos.y =
+                            level.tamanho_tile_h * cavaleiro.tile_pos.y;
 
-                    break;
+                        Boss_Init(&boss,
+                            (Vector2){
+                                level.tamanho_tile *
+                                (LARGURA_MAPA * 3 / 4),
+
+                                level.tamanho_tile_h *
+                                (ALTURA_MAPA / 2)
+                            },
+                            &level);
+
+                        Timer_Start(&timer);
+
+                        bossJaMorreu = false;
+
+                        gameState = STATE_BOSS;
+
+                        break;
+                    }
                 }
             }
 
@@ -314,6 +367,25 @@ int main(void) {
                      18,
                      DARKGRAY);
 
+            DrawText("C para pausar/resumir",
+                     10,
+                     140,
+                     18,
+                     DARKGRAY);
+
+            if (isPaused) {
+                int screenW = GetScreenWidth();
+                int screenH = GetScreenHeight();
+                DrawRectangle(0, 0, screenW, screenH, (Color){0, 0, 0, 150});
+                const char *pauseText = "JOGO PAUSADO - C para retornar | ESC para sair";
+                int textW = MeasureText(pauseText, 28);
+                DrawText(pauseText,
+                         (screenW - textW) / 2,
+                         screenH / 2 - 16,
+                         28,
+                         YELLOW);
+            }
+
             DrawFPS(GetScreenWidth() - 100, 10);
 
             EndDrawing();
@@ -322,8 +394,17 @@ int main(void) {
 
         case STATE_BOSS: {
 
-            Timer_Update(&timer, dt);
+            if (isPaused && escPressed) {
+                isPaused = false;
+                ShowCursor();
+                Timer_Reset(&timer);
+                gameState = STATE_MENU;
+                break;
+            }
+
             if (!isPaused) {
+                Timer_Update(&timer, dt);
+
                 UpdatePlayer(&cavaleiro,
                              dt,
                              &level);
@@ -387,42 +468,42 @@ int main(void) {
                 lastHitboxActive = hitNow;
 
                 (void)Boss_GetAttackCircle(&boss, NULL);
-            }
 
-            if (bossJaMorreu) {
+                if (bossJaMorreu) {
 
-                TipeTile tileAtual =
-                    level_get_tile(
-                        &level,
-                        cavaleiro.pos.x,
-                        cavaleiro.pos.y);
+                    TipeTile tileAtual =
+                        level_get_tile(
+                            &level,
+                            cavaleiro.pos.x,
+                            cavaleiro.pos.y);
 
-                if (tileAtual == TILE_PORTA) {
-                    float doorTileX = LARGURA_MAPA - 1.5f;
-                    float doorTileY = ALTURA_MAPA / 2.0f;
-                    float doorX = doorTileX * level.tamanho_tile;
-                    float doorY = doorTileY * level.tamanho_tile_h;
-                    
-                    float distToDoor = sqrtf(
-                        (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
-                        (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
-                    );
-                    
-                    float doorRadius = level.tamanho_tile * 1.2f;
-                    
-                    if (distToDoor < doorRadius) {
+                    if (tileAtual == TILE_PORTA) {
+                        float doorTileX = LARGURA_MAPA - 1.5f;
+                        float doorTileY = ALTURA_MAPA / 2.0f;
+                        float doorX = doorTileX * level.tamanho_tile;
+                        float doorY = doorTileY * level.tamanho_tile_h;
+                        
+                        float distToDoor = sqrtf(
+                            (cavaleiro.pos.x - doorX) * (cavaleiro.pos.x - doorX) +
+                            (cavaleiro.pos.y - doorY) * (cavaleiro.pos.y - doorY)
+                        );
+                        
+                        float doorRadius = level.tamanho_tile * 1.2f;
+                        
+                        if (distToDoor < doorRadius) {
 
-                        Timer_Stop(&timer);
+                            Timer_Stop(&timer);
 
-                        letrasDigitadas = 0;
+                            letrasDigitadas = 0;
 
-                        memset(iniciais, 0,
-                               sizeof(iniciais));
+                            memset(iniciais, 0,
+                                   sizeof(iniciais));
 
-                        gameState =
-                            STATE_SALVAR_TEMPO;
+                            gameState =
+                                STATE_SALVAR_TEMPO;
 
-                        break;
+                            break;
+                        }
                     }
                 }
             }
@@ -654,7 +735,10 @@ int main(void) {
             EndDrawing();
 
             if (IsKeyPressed(KEY_ENTER))
+            {
+                ShowCursor();
                 gameState = STATE_MENU;
+            }
 
         } break;
 
@@ -671,7 +755,10 @@ int main(void) {
             EndDrawing();
 
             if (IsKeyPressed(KEY_ENTER))
+            {
+                ShowCursor();
                 gameState = STATE_MENU;
+            }
 
         } break;
         }

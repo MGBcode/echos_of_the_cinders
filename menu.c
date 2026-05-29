@@ -22,6 +22,10 @@ static bool DrawBotao(Rectangle rect, const char *texto) {
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
+static Rectangle MakeMenuButton(int centerX, int topY, int width, int height) {
+    return (Rectangle){ (float)centerX - width / 2.0f, (float)topY, (float)width, (float)height };
+}
+
 MenuOpcao Menu_DrawPrincipal(void) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -38,23 +42,74 @@ MenuOpcao Menu_DrawPrincipal(void) {
     DrawLine(sw / 4, sh / 4 + tituloSize + 50,
              sw * 3 / 4, sh / 4 + tituloSize + 50,
              (Color){80, 80, 80, 255});
-    int botaoW  = 280;
+    int botaoW  = sw < 420 ? sw - 80 : 280;
+    if (botaoW < 220) botaoW = 220;
     int botaoH  = 54;
-    int botaoX  = (sw - botaoW) / 2;
-    int jogarY  = sh / 2;
-    int recordY = jogarY + botaoH + 20;
+    int espacamento = 16;
+    int totalAltura = (botaoH * 4) + (espacamento * 3);
+    int topY = sh / 2 - totalAltura / 2;
+    int minTopY = sh / 4 + tituloSize + 86;
+    if (topY < minTopY) topY = minTopY;
 
-    Rectangle rJogar   = { (float)botaoX, (float)jogarY,  (float)botaoW, (float)botaoH };
-    Rectangle rRecorde = { (float)botaoX, (float)recordY, (float)botaoW, (float)botaoH };
+    Rectangle rJogar    = MakeMenuButton(sw / 2, topY, botaoW, botaoH);
+    Rectangle rComandos = MakeMenuButton(sw / 2, topY + botaoH + espacamento, botaoW, botaoH);
+    Rectangle rRecorde  = MakeMenuButton(sw / 2, topY + (botaoH + espacamento) * 2, botaoW, botaoH);
+    Rectangle rSair     = MakeMenuButton(sw / 2, topY + (botaoH + espacamento) * 3, botaoW, botaoH);
 
-    if (DrawBotao(rJogar,   "JOGAR"))           return MENU_OPCAO_JOGAR;
-    if (DrawBotao(rRecorde, "MELHORES TEMPOS")) return MENU_OPCAO_RECORDES;
-    const char *rodape = "WASD: mover  |  ESPACO: dash  |  LMB: atacar";
+    if (DrawBotao(rJogar,    "JOGAR"))            return MENU_OPCAO_JOGAR;
+    if (DrawBotao(rComandos, "COMANDOS"))         return MENU_OPCAO_COMANDOS;
+    if (DrawBotao(rRecorde,  "MELHORES TEMPOS"))  return MENU_OPCAO_RECORDES;
+    if (DrawBotao(rSair,     "SAIR"))             return MENU_OPCAO_SAIR;
+
+    const char *rodape = "WASD: mover | ESPACO: dash | LMB: atacar | ESC: voltar";
     int rodapeSize = 16;
     int rodapeW    = MeasureText(rodape, rodapeSize);
     DrawText(rodape, (sw - rodapeW) / 2, sh - 40, rodapeSize, (Color){80, 80, 80, 255});
 
     return MENU_OPCAO_NENHUMA;
+}
+
+void Menu_DrawComandos(void) {
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+
+    ClearBackground((Color){10, 10, 10, 255});
+
+    const char *titulo = "COMANDOS";
+    int tituloSize = 48;
+    int tituloW = MeasureText(titulo, tituloSize);
+    DrawText(titulo,
+             (sw - tituloW) / 2,
+             70,
+             tituloSize,
+             (Color){210, 90, 40, 255});
+
+    const char *linhas[] = {
+        "WASD - mover",
+        "ESPACO - dash",
+        "CLIQUE ESQUERDO - atacar",
+        "CLIQUE DIREITO - aparar",
+        "Q - curar",
+        "ESC - voltar ao menu principal",
+        "SHIFT + ESC - fechar o jogo"
+    };
+
+    int y = 180;
+    for (int i = 0; i < 7; i++) {
+        int size = 26;
+        int textW = MeasureText(linhas[i], size);
+        DrawText(linhas[i], (sw - textW) / 2, y, size, LIGHTGRAY);
+        y += 42;
+    }
+
+    const char *rodape = "Pressione ESC para voltar";
+    int rodapeSize = 20;
+    int rodapeW = MeasureText(rodape, rodapeSize);
+    DrawText(rodape,
+             (sw - rodapeW) / 2,
+             sh - 60,
+             rodapeSize,
+             GRAY);
 }
 
 void Menu_DrawDerrota(void) {
