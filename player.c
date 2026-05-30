@@ -1,20 +1,23 @@
 #include "player.h"
 #include "raymath.h"
 #include "level.h"
+#include <stddef.h>
 
 bool PodeMoverPara(Level *level, float px, float py, float raio, int tw, int th) {
+    /*A linhas abaixo pegam as coordenadas dos tiles que o player ocupa*/
     int esq   = (int)((px - raio) / tw);
     int dir   = (int)((px + raio) / tw);
     int cima  = (int)((py - raio) / th);
     int baixo = (int)((py + raio) / th);
 
+    //A função level_pode_mover é chamada para cada um dos 4 tiles que o player ocupa, para verificar se ele pode se mover para essa posição. Se algum dos tiles for bloqueado, a função retorna false, indicando que o player não pode se mover para essa posição.
     return level_pode_mover(level, esq, cima) &&
            level_pode_mover(level, dir, cima) &&
            level_pode_mover(level, esq, baixo) &&
            level_pode_mover(level, dir, baixo);
 }
 
-void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
+void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTextures *textures) { //Adicionado o parâmetro de textura do player.
     player->tile_pos = (Vector2){ tileX, tileY };
     player->pos = (Vector2){ tileX * level->tamanho_tile, tileY * level->tamanho_tile_h };
     player->raio = level->tamanho_tile * 0.35f;
@@ -26,7 +29,8 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->dashTimeCounter = 0.0f;
     player->cooldownTimeCounter = 0.0f;
     player->dashDirection = (Vector2){ 0, 0 };
-    player->lastMovingDir = (Vector2){ 1.0f, 0.0f };
+    player->lastMovingDir = (Vector2){ 0.0f, 1.0f }; //Começa olhando para o SUL.
+    player->attackDirection = player->lastMovingDir;
     player->lastHorizontalInput = 1;
     player->lastVerticalInput = 0;
     player->comboStep = 0;
@@ -62,6 +66,125 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level) {
     player->currentAttackDamage = 0;
     player->isChargingHeavy = false;
     player->alive = true;
+
+    //Inicialização das variáveis de animação:
+    player->textures = textures; //player aqui está recebendo o endereço do PlayerTextures criado na main, que já tem as texturas carregadas. Assim, player->textures aponta para as texturas do player.
+    player->activeTexture = NULL; //Começa sem textura ativa, a textura será definida no UpdatePlayer de acordo com o estado do player.
+    player->currentFrame = 0; //Começa no frame 0, mas a textura só será definida no UpdatePlayer, então isso é apenas uma inicialização segura.
+    player->activeMaxFrames = 1; //Será substituído pelo valor correto da animação ativa no UpdatePlayer.
+    player->frameTimer = 0.0f; //Inicializa o timer de troca de frames.
+    player->currentDirIndex = 7; //Começa olhando para o SUL, que é dir8 no pacote.
+    player->spriteAnchorOffset = (Vector2){ 0.0f, 0.0f };
+    player->frameRec = (Rectangle){0, 0, 0, 0}; //Inicializa o retângulo de corte da textura. O UpdatePlayer vai atualizar isso de acordo com o frame atual e a direção.
+}
+
+//SetupAnimationSprite é a função responsável por configurar a textura de animação do player, definindo o frame atual, o retângulo de corte e a velocidade de animação. Ela é chamada dentro do UpdatePlayer para atualizar a animação de acordo com o estado do player.
+static void SetupAnimationSprite(Player *player, Texture2D *texture, int frameCols, int frameRows, int totalFrames, float deltaTime, float animSpeed) {
+    if (frameCols < 1) frameCols = 1;
+    if (frameRows < 1) frameRows = 1;
+    if (totalFrames < 1) totalFrames = 1;
+
+    if (player->activeTexture != texture || player->activeMaxFrames != totalFrames) {
+        player->activeTexture = texture;
+        player->activeMaxFrames = totalFrames;
+        player->currentFrame = 0;
+        player->frameTimer = 0.0f;
+    }
+
+    if (player->activeTexture == NULL) {
+        return;
+    }
+
+    float frameW = (float)player->activeTexture->width / (float)frameCols;
+    float frameH = (float)player->activeTexture->height / (float)frameRows;
+
+    if (frameW <= 0.0f) frameW = (float)player->activeTexture->width;
+    if (frameH <= 0.0f) frameH = (float)player->activeTexture->height;
+
+    player->frameTimer += deltaTime;
+    if (player->frameTimer >= (1.0f / animSpeed)) {
+        player->frameTimer = 0.0f;
+        player->currentFrame++;
+        if (player->currentFrame >= player->activeMaxFrames) {
+            player->currentFrame = player->alive ? 0 : player->activeMaxFrames - 1;
+        }
+    }
+
+    int frameIndex = player->currentFrame;
+    int frameCol = frameIndex % frameCols;
+    int frameRow = frameIndex / frameCols;
+
+    player->frameRec.width = frameW;
+    player->frameRec.height = frameH;
+    player->frameRec.x = frameCol * frameW;
+    player->frameRec.y = frameRow * frameH;
+}
+
+//GetPlayerSpriteAnchors é uma função auxiliar que calcula as posições dos pontos de ancoragem do sprite do player, como o topo esquerdo e o centro, com base no retângulo de corte atual da textura e no raio do player. Esses pontos de ancoragem são usados para posicionar corretamente o sprite em relação à posição física do player no mundo do jogo.
+static void GetPlayerSpriteAnchors(const Player *player, Vector2 *topLeft, Vector2 *core) {
+    float frameW = player->frameRec.width;
+    float frameH = player->frameRec.height;
+
+    if (frameW <= 0.0f || frameH <= 0.0f) {
+        frameW = player->raio * 2.0f;
+        frameH = player->raio * 2.0f;
+    }
+
+    Vector2 spriteTopLeft = {
+        player->pos.x - (frameW / 2.0f),
+        player->pos.y - (frameH * 0.85f)
+    };
+
+    Vector2 spriteCore = {
+        spriteTopLeft.x + (frameW * 0.50f),
+        spriteTopLeft.y + (frameH * 0.50f)
+    };
+
+    spriteTopLeft.x += player->spriteAnchorOffset.x;
+    spriteTopLeft.y += player->spriteAnchorOffset.y;
+
+    spriteCore.x += player->spriteAnchorOffset.x;
+    spriteCore.y += player->spriteAnchorOffset.y;
+
+    if (topLeft != NULL) *topLeft = spriteTopLeft;
+    if (core != NULL) *core = spriteCore;
+}
+
+//UpdateAttackHitboxFromSprite é a função responsável por atualizar a posição da hitbox de ataque do player com base na posição do sprite e na direção do ataque. Ela é chamada dentro do UpdatePlayer para garantir que a hitbox esteja sempre alinhada com o sprite durante as animações de ataque.
+static void UpdateAttackHitboxFromSprite(Player *player) {
+    //O IF aqui verifica se a hitbox de ataque está ativa. Se não estiver ativa, não faz sentido atualizar a posição da hitbox, então a função retorna imediatamente.
+    if (!player->isHitboxActive) {
+        return;
+    }
+
+    // A hitbox usa a direção travada no início do ataque, para não depender do input atual.
+    Vector2 aimDir = player->attackDirection;
+    if (aimDir.x == 0.0f && aimDir.y == 0.0f) {
+        aimDir = player->lastMovingDir;
+    }
+
+    aimDir = Vector2Normalize(aimDir);
+
+    Vector2 spriteTopLeft;
+    Vector2 spriteCore;
+    GetPlayerSpriteAnchors(player, &spriteTopLeft, &spriteCore);
+
+    float frameW = player->frameRec.width;
+    float frameH = player->frameRec.height;
+    float maxReach = (frameW > frameH ? frameW : frameH) * 0.25f;
+    if (player->comboStep == 3) maxReach *= 1.20f;
+    else if (player->comboStep == 4) maxReach *= 1.35f;
+
+    float useReach = maxReach * 0.9f;
+    if (useReach < 1.0f) useReach = 0.0f;
+
+    float forwardOffset = (frameW > frameH ? frameW : frameH) * 0.18f;
+    if (player->comboStep == 3) forwardOffset *= 1.10f;
+    else if (player->comboStep == 4) forwardOffset *= 1.20f;
+
+    float attackOffset = useReach + forwardOffset;
+
+    player->hitboxCenter = Vector2Add(spriteCore, Vector2Scale(aimDir, attackOffset));
 }
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
@@ -70,6 +193,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     bool staminaInfinite = (level->salaAtual == SALA_TREINO);
     player->raio = level->tamanho_tile * 0.35f;
     player->normalSpeed = 340.0f;
+
     if (staminaInfinite) {
         player->stamina = player->staminaMax;
         player->staminaRecoveryDelayCounter = player->staminaRecoveryDelay;
@@ -95,7 +219,11 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         }
     }
 
-    if (!player->alive) return;
+    bool hasMovementInput = false;
+    
+    if (!player->alive) {
+        goto LOGICA_VISUAL; //Se o player não está vivo, ele não pode fazer nada além de processar a animação de morte. Então pulamos toda a lógica de movimentação e ações e vamos direto para a parte de atualização da animação, que está no final da função, após a label LOGICA_VISUAL. 
+    }
 
     float r = player->raio * 1.2f;
 
@@ -134,6 +262,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
     }
 
     inputDir = Vector2Normalize(inputDir);
+    hasMovementInput = (inputDir.x != 0.0f || inputDir.y != 0.0f);
 
     bool isInputDiagonal = (inputDir.x != 0.0f && inputDir.y != 0.0f);
 
@@ -161,6 +290,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         if (IsKeyDown(KEY_E)) {
             player->heavyChargeTimer += deltaTime;
             if (player->heavyChargeTimer >= 2.5f) {
+                //(Código original de ataque pesado).
                 player->heavyChargeTimer = 2.5f;
                 player->currentAttackDamage = 50;
                 float cost = 60.0f;
@@ -177,6 +307,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1;
                 player->attackStateTimer = 0.0f;
                 player->comboStep = 4;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 player->isHitboxActive = false;
                 player->hasHitEnemy = false;
             }
@@ -210,6 +341,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->attackState = 1;
             player->attackStateTimer = 0.0f;
             player->comboStep = 4;
+            player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
             player->isHitboxActive = false;
             player->hasHitEnemy = false;
         }
@@ -262,6 +394,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 if (!staminaInfinite) {
                     PlayerUseStamina(player, ATTACK_COST);
                 }
@@ -273,6 +406,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 if (!staminaInfinite) {
                     PlayerUseStamina(player, ATTACK_COST);
                 }
@@ -288,6 +422,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         player->hasHitEnemy = false;
     }
 
+    //(Código original de resolução da hitbox de ataque).
     if (player->attackState == 1) {
         player->attackStateTimer += deltaTime;
         float windup;
@@ -315,13 +450,10 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->currentAttackDamage = 15;
             }
 
-            float distFront = 0.0f;
             if (player->comboStep == 1 || player->comboStep == 2) {
                 player->hitboxRadius = tw * 0.7f;
-                distFront = tw * 0.4f;
             } else if (player->comboStep == 3) {
                 player->hitboxRadius = tw * 0.3f;
-                distFront = tw * 0.8f;
             } else if (player->comboStep == 4) {
                 float baseRadius = tw * 0.7f;
                 float charge = player->heavyChargeTimer;
@@ -335,10 +467,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 } else {
                     player->hitboxRadius = baseRadius * 2.0f;
                 }
-                distFront = tw * 0.4f;
             }
-            player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
-            player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
         }
     } else if (player->attackState == 2) {
         player->attackStateTimer += deltaTime;
@@ -348,17 +477,6 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
         } else {
             active = player->attackActive[player->comboStep - 1];
         }
-
-        float distFront = 0.0f;
-        if (player->comboStep == 1 || player->comboStep == 2) {
-            distFront = tw * 0.4f;
-        } else if (player->comboStep == 3) {
-            distFront = tw * 0.8f;
-        } else if (player->comboStep == 4) {
-            distFront = tw * 0.4f;
-        }
-        player->hitboxCenter.x = player->pos.x + (player->lastMovingDir.x * distFront);
-        player->hitboxCenter.y = player->pos.y + (player->lastMovingDir.y * distFront);
 
         if (player->attackStateTimer >= active) {
             player->attackState = 3;
@@ -434,38 +552,149 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
 
     player->tile_pos.x = player->pos.x / tw;
     player->tile_pos.y = player->pos.y / th;
+
+LOGICA_VISUAL:
+    //Atualização da animação do player:
+    if (player->textures != NULL) { 
+        // 1. Converter Vetor para Índice de Direção (0 a 7 correspondendo a dir1..dir8)
+        float dx = player->lastMovingDir.x;
+        float dy = player->lastMovingDir.y;
+        
+        // Ordem real dos arquivos dir1..dir8 deste pacote:
+        // dir1=SW, dir2=W, dir3=NW, dir4=N, dir5=NE, dir6=E, dir7=SE, dir8=S.
+        if (dx == 0 && dy > 0) player->currentDirIndex = 7;       // Sul -> dir8
+        else if (dx > 0 && dy > 0) player->currentDirIndex = 6;   // Sudeste -> dir7
+        else if (dx > 0 && dy == 0) player->currentDirIndex = 5;  // Leste -> dir6
+        else if (dx > 0 && dy < 0) player->currentDirIndex = 4;   // Nordeste -> dir5
+        else if (dx == 0 && dy < 0) player->currentDirIndex = 3;  // Norte -> dir4
+        else if (dx < 0 && dy < 0) player->currentDirIndex = 2;   // Noroeste -> dir3
+        else if (dx < 0 && dy == 0) player->currentDirIndex = 1;  // Oeste -> dir2
+        else if (dx < 0 && dy > 0) player->currentDirIndex = 0;   // Sudoeste -> dir1
+
+        // 2. Determinar a textura e grade pela Máquina de Estados
+        Texture2D* nextTexture = &player->textures->idle[player->currentDirIndex];
+        int nextFrameCols = player->textures->idleFrameCols;
+        int nextFrameRows = player->textures->idleFrameRows;
+        int nextTotalFrames = player->textures->idleTotalFrames;
+        float animSpeed = player->textures->idleAnimSpeed;
+
+        if (!player->alive) {
+            nextTexture = &player->textures->die[player->currentDirIndex];
+            nextFrameCols = player->textures->dieFrameCols;
+            nextFrameRows = player->textures->dieFrameRows;
+            nextTotalFrames = player->textures->dieTotalFrames;
+            animSpeed = player->textures->dieAnimSpeed;
+        } else if (player->isHealing) {
+            player->spriteAnchorOffset = (Vector2){ 0.0f, 2.0f };
+            nextTexture = &player->textures->heal[player->currentDirIndex];
+            nextFrameCols = player->textures->healFrameCols;
+            nextFrameRows = player->textures->healFrameRows;
+            nextTotalFrames = player->textures->healTotalFrames;
+            animSpeed = player->textures->healAnimSpeed;
+        } else if (player->isParrying) {
+            player->spriteAnchorOffset = (Vector2){ 0.0f, 0.0f };
+            nextTexture = &player->textures->parry[player->currentDirIndex];
+            nextFrameCols = player->textures->parryFrameCols;
+            nextFrameRows = player->textures->parryFrameRows;
+            nextTotalFrames = player->textures->parryTotalFrames;
+            animSpeed = player->textures->parryAnimSpeed;
+        } else if (player->isDashing) {
+            player->spriteAnchorOffset = (Vector2){ 0.0f, 0.0f };
+            nextTexture = &player->textures->dash[player->currentDirIndex];
+            nextFrameCols = player->textures->dashFrameCols;
+            nextFrameRows = player->textures->dashFrameRows;
+            nextTotalFrames = player->textures->dashTotalFrames;
+            animSpeed = player->textures->dashAnimSpeed;
+        } else if (player->attackState > 0) {
+            animSpeed = player->textures->attackAnimSpeed;
+            //Ao selecionar abaixo, o player->comboStep já foi atualizado para o próximo ataque, então ele já aponta para a animação correta do próximo ataque. Assim, se comboStep for 1, ele mostra a animação do primeiro ataque, se for 2, mostra a animação do segundo ataque, e assim por diante. Isso garante que a animação corresponda ao estado atual do combo.
+            if (player->comboStep == 1) {
+                player->spriteAnchorOffset = (Vector2){ 0.0f, 4.0f };
+                nextTexture = &player->textures->attack[player->currentDirIndex];
+                nextFrameCols = player->textures->attackFrameCols;
+                nextFrameRows = player->textures->attackFrameRows;
+                nextTotalFrames = player->textures->attackTotalFrames;
+                animSpeed = player->textures->attackAnimSpeed;
+            } else if (player->comboStep == 2) {
+                player->spriteAnchorOffset = (Vector2){ 0.0f, 4.0f };
+                nextTexture = &player->textures->attack[player->currentDirIndex];
+                nextFrameCols = player->textures->attackFrameCols;
+                nextFrameRows = player->textures->attackFrameRows;
+                nextTotalFrames = player->textures->attackTotalFrames;
+                animSpeed = player->textures->attackAnimSpeed;
+            } else if (player->comboStep == 3) {
+                player->spriteAnchorOffset = (Vector2){ 0.0f, 2.5f };
+                nextTexture = &player->textures->comboAttack[player->currentDirIndex];
+                nextFrameCols = player->textures->comboAttackFrameCols;
+                nextFrameRows = player->textures->comboAttackFrameRows;
+                nextTotalFrames = player->textures->comboAttackTotalFrames;
+                animSpeed = player->textures->comboAttackAnimSpeed;
+            } else if (player->comboStep == 4) {
+                player->spriteAnchorOffset = (Vector2){ 0.0f, 1.5f };
+                nextTexture = &player->textures->heavyAttack[player->currentDirIndex];
+                nextFrameCols = player->textures->heavyAttackFrameCols;
+                nextFrameRows = player->textures->heavyAttackFrameRows;
+                nextTotalFrames = player->textures->heavyAttackTotalFrames;
+                animSpeed = player->textures->heavyAttackAnimSpeed;
+            }
+        } else if (hasMovementInput) {
+            player->spriteAnchorOffset = (Vector2){ 0.0f, 0.0f };
+            nextTexture = &player->textures->walk[player->currentDirIndex];
+            nextFrameCols = player->textures->walkFrameCols;
+            nextFrameRows = player->textures->walkFrameRows;
+            nextTotalFrames = player->textures->walkTotalFrames;
+            animSpeed = player->textures->walkAnimSpeed;
+        } else {
+            player->spriteAnchorOffset = (Vector2){ 0.0f, 0.0f };
+        }
+
+        SetupAnimationSprite(player, nextTexture, nextFrameCols, nextFrameRows, nextTotalFrames, deltaTime, animSpeed);
+        UpdateAttackHitboxFromSprite(player);
+    }
 }
 
 void DrawPlayer(Player player) {
-    if (!player.alive) return;
+    if (player.activeTexture != NULL && player.activeTexture->id != 0) {
+        Vector2 renderPos;
+        Vector2 spriteCore;
+        GetPlayerSpriteAnchors(&player, &renderPos, &spriteCore);
+        
+        // Destacar o jogador ao dar dash/receber dano colorindo o sprite todo
+        Color tint = WHITE;
+        if (player.isDashing) tint = ORANGE; // Feedback visual que está em i-frames
+        else if (player.cooldownTimeCounter > 0.0f) tint = GRAY; // Em cooldown
 
-    Color playerOuterColor = MAROON;
-    if (player.isDashing) playerOuterColor = WHITE;
-    else if (player.cooldownTimeCounter > 0.0f) playerOuterColor = DARKGRAY;
+        DrawTextureRec(*player.activeTexture, player.frameRec, renderPos, tint);
+        
+    } else {
+        // Fallback: Se as texturas não estiverem carregadas, volta para a bolinha base original
+        if (!player.alive) return;
+        Color playerOuterColor = MAROON;
+        if (player.isDashing) playerOuterColor = WHITE;
+        else if (player.cooldownTimeCounter > 0.0f) playerOuterColor = DARKGRAY;
 
-    DrawCircleV(player.pos, player.raio, playerOuterColor);
-    DrawCircleGradient(player.pos, player.raio * 0.65f, ORANGE, playerOuterColor);
+        DrawCircleV(player.pos, player.raio, playerOuterColor);
+        DrawCircleGradient(player.pos, player.raio * 0.65f, ORANGE, playerOuterColor);
+    }
+    // Opcional: Mantivemos as formas das armas originais sendo desenhadas como visual/debug da hitbox
     if (player.isParrying) {
-        DrawCircleLines((int)player.pos.x, (int)player.pos.y, player.raio * 1.5f, BLUE);
+        Vector2 spriteTopLeft;
+        Vector2 spriteCore;
+        GetPlayerSpriteAnchors(&player, &spriteTopLeft, &spriteCore);
+        DrawCircleLines((int)spriteCore.x, (int)spriteCore.y, player.raio * 1.35f, BLUE);
     }
     if (player.isHitboxActive) {
         DrawCircleLines((int)player.hitboxCenter.x, (int)player.hitboxCenter.y, player.hitboxRadius, RED);
     }
 }
 
-
 void PlayerTakeDamage(Player *player, int damage) {
-    if (player->isParrying) {
-        return;
-    }
-
-    if (player->isDashing) return;
+    if (player->isParrying || player->isDashing) return;
 
     player->hp -= damage;
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {
         player->alive = false;
-        
         player->isDashing = false;
         player->isHitboxActive = false;
         player->isParrying = false;
@@ -477,7 +706,6 @@ void PlayerTakeDamage_IgnoreParry(Player *player, int damage) {
     if (player->isDashing) return;
 
     player->isParrying = false;
-
     player->hp -= damage;
     if (player->hp < 0) player->hp = 0;
     if (player->hp == 0) {
@@ -492,8 +720,6 @@ void PlayerTakeDamage_IgnoreParry(Player *player, int damage) {
 void PlayerUseStamina(Player *player, float amount) {
     player->stamina -= amount;
     if (player->stamina < 0.0f) player->stamina = 0.0f;
-    
-    
     player->staminaRecoveryDelayCounter = 0.0f;
 }
 
@@ -516,11 +742,9 @@ void UpdatePlayerStamina(Player *player, float deltaTime) {
 void DrawPlayerHUD(const Player *player, int x, int y) {
     
     DrawText(TextFormat("HP: %d/%d", player->hp, player->hpMax), x, y, 20, LIGHTGRAY);
-    
     const int barW = 220;
     const int barH = 14;
     const int barY = y + 24;
-    
     
     DrawRectangle(x, barY, barW, barH, (Color){ 40, 40, 40, 220 });
     DrawRectangleLines(x, barY, barW, barH, (Color){ 110, 110, 110, 255 });

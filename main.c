@@ -10,8 +10,71 @@
 #include <string.h>
 #include <stdlib.h>
 
-static void RestoreCursorOnExit(void) {
-    ShowCursor();
+//Funções de Carregamento e Descarregamento de Texturas do Player.
+void LoadPlayerTextures(PlayerTextures *pt){
+    for (int i = 0; i < 8; i++) {
+        pt->idle[i] = LoadTexture(TextFormat("assets/Parado/KnightSwordShield_Idle_dir%d.png", i + 1));
+        pt->walk[i] = LoadTexture(TextFormat("assets/Walk/KnightSwordShield_Walk_dir%d.png", i + 1));
+        pt->attack[i] = LoadTexture(TextFormat("assets/Attack/KnightSwordShield_Attack_dir%d.png", i + 1));
+        pt->comboAttack[i] = LoadTexture(TextFormat("assets/ComboAttack/KnightSwordShield_ComboAttack_dir%d.png", i + 1));
+        pt->heavyAttack[i] = LoadTexture(TextFormat("assets/AtaqueEstiloArco/KnightSwordShield_SpinAttack_dir%d.png", i + 1));
+        pt->die[i] = LoadTexture(TextFormat("assets/Morte/KnightSwordShield_Die_dir%d.png", i + 1));
+        pt->dash[i] = LoadTexture(TextFormat("assets/Correr/KnightSwordShield_Run_dir%d.png", i + 1));
+        pt->parry[i] = LoadTexture(TextFormat("assets/Bloquear/KnightSwordShield_Block_dir%d.png", i + 1));
+        pt->heal[i] = LoadTexture(TextFormat("assets/Cura/KnightSwordShield_PowerUp_dir%d.png", i + 1));
+    }
+
+    pt->idleFrameCols = 5;
+    pt->idleFrameRows = 4;
+    pt->idleTotalFrames = 17;
+    pt->walkFrameCols = 4;
+    pt->walkFrameRows = 4;
+    pt->walkTotalFrames = 13;
+    pt->attackFrameCols = 4;
+    pt->attackFrameRows = 4;
+    pt->attackTotalFrames = 15;
+    pt->comboAttackFrameCols = 6;
+    pt->comboAttackFrameRows = 6;
+    pt->comboAttackTotalFrames = 35;
+    pt->heavyAttackFrameCols = 5;
+    pt->heavyAttackFrameRows = 4;
+    pt->heavyAttackTotalFrames = 16;
+    pt->dieFrameCols = 5;
+    pt->dieFrameRows = 5;
+    pt->dieTotalFrames = 24;
+    pt->dashFrameCols = 3;
+    pt->dashFrameRows = 3;
+    pt->dashTotalFrames = 8;
+    pt->parryFrameCols = 3;
+    pt->parryFrameRows = 2;
+    pt->parryTotalFrames = 5;
+    pt->healFrameCols = 4;
+    pt->healFrameRows = 4;
+    pt->healTotalFrames = 16;
+
+    pt->idleAnimSpeed = 11.3f;
+    pt->walkAnimSpeed = 14.4f;
+    pt->attackAnimSpeed = 25.5f;
+    pt->comboAttackAnimSpeed = 29.2f;
+    pt->heavyAttackAnimSpeed = 20.0f;
+    pt->dieAnimSpeed = 15.0f;
+    pt->dashAnimSpeed = 26.7f;
+    pt->parryAnimSpeed = 12.0f;
+    pt->healAnimSpeed = 13.3f;
+}
+
+void UnloadPlayerTextures(PlayerTextures *pt){
+    for (int i = 0; i < 8; i++) {
+        UnloadTexture(pt->idle[i]);
+        UnloadTexture(pt->walk[i]);
+        UnloadTexture(pt->attack[i]);
+        UnloadTexture(pt->comboAttack[i]);
+        UnloadTexture(pt->heavyAttack[i]);
+        UnloadTexture(pt->die[i]);
+        UnloadTexture(pt->dash[i]);
+        UnloadTexture(pt->parry[i]);
+        UnloadTexture(pt->heal[i]);
+    }
 }
 
 static void DrawBossHUD(const Boss *boss) {
@@ -62,7 +125,7 @@ static void DrawBossHUD(const Boss *boss) {
 static void ResetJogo(Player *cavaleiro,
                       Boss *boss,
                       TrainingDummy *dummy,
-                      Level *level)
+                      Level *level, PlayerTextures *playerVisuals)
 {
     level_carregar_sala(level, SALA_TREINO);
     level_atualizar_tile(level);
@@ -70,7 +133,7 @@ static void ResetJogo(Player *cavaleiro,
     InitPlayer(cavaleiro,
                2.5f,
                ALTURA_MAPA / 2.0f,
-               level);
+               level, playerVisuals);
 
     TrainingDummy_Init(dummy,
                        7.5f,
@@ -81,14 +144,13 @@ static void ResetJogo(Player *cavaleiro,
 int main(void) {
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
-
     InitWindow(800, 600, "Echos of the Cinders");
-
-    atexit(RestoreCursorOnExit);
-
     SetExitKey(KEY_NULL);
-
     SetTargetFPS(60);
+
+    //Carregamento de Texturas do Player (A GPU só liga DEPOIS do InitWindow).
+    PlayerTextures playerVisuals;
+    LoadPlayerTextures(&playerVisuals);
 
     Player cavaleiro;
     Level level;
@@ -97,17 +159,10 @@ int main(void) {
 
     level_iniciar(&level);
 
-    ResetJogo(&cavaleiro,
-              &boss,
-              &dummy,
-              &level);
-
+    ResetJogo(&cavaleiro, &boss, &dummy, &level, &playerVisuals);
     TimerData timer;
-
     Timer_Reset(&timer);
-
     GameState gameState = STATE_MENU;
-
     bool bossJaMorreu = false;
 
     int lastScreenWidth  = GetScreenWidth();
@@ -122,7 +177,6 @@ int main(void) {
     int letrasDigitadas = 0;
 
     while (!WindowShouldClose() && !shouldExit) {
-
         float dt = GetFrameTime();
         bool escPressed = IsKeyPressed(KEY_ESCAPE);
         bool shiftDown = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
@@ -148,7 +202,6 @@ int main(void) {
              GetScreenWidth() != lastScreenWidth))
         {
             level_atualizar_tile(&level);
-
             cavaleiro.pos.x = cavaleiro.tile_pos.x * level.tamanho_tile;
             cavaleiro.pos.y = cavaleiro.tile_pos.y * level.tamanho_tile_h;
 
@@ -178,7 +231,8 @@ int main(void) {
                 ResetJogo(&cavaleiro,
                           &boss,
                           &dummy,
-                          &level);
+                          &level,
+                          &playerVisuals);
 
                 level_atualizar_tile(&level);
 
@@ -279,11 +333,11 @@ int main(void) {
                     !lastHitboxActive &&
                     dummy.alive)
                 {
-                    if (CheckCollisionCircles(
-                            cavaleiro.hitboxCenter,
-                            cavaleiro.hitboxRadius,
-                            dummy.pos,
-                            dummy.raio))
+                        if (CheckCollisionCircles(
+                                cavaleiro.hitboxCenter,
+                                cavaleiro.hitboxRadius * 0.70f,
+                                dummy.pos,
+                                dummy.raio))
                     {
                         TrainingDummy_TakeDamage(
                             &dummy,
@@ -453,11 +507,11 @@ int main(void) {
                     !lastHitboxActive &&
                     boss.hp > 0)
                 {
-                    if (CheckCollisionCircles(
-                            cavaleiro.hitboxCenter,
-                            cavaleiro.hitboxRadius,
-                            boss.pos,
-                            boss.raio))
+                        if (CheckCollisionCircles(
+                                cavaleiro.hitboxCenter,
+                                cavaleiro.hitboxRadius * 0.70f,
+                                boss.pos,
+                                boss.raio))
                     {
                         boss.hp -= cavaleiro.currentAttackDamage;
                         if (boss.hp < 0)
@@ -764,6 +818,9 @@ int main(void) {
         }
     }
 
+    //Liberação de memória de Texturas do Player.
+    UnloadPlayerTextures(&playerVisuals);
+    ShowCursor();
     CloseWindow();
 
     return 0;
