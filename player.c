@@ -4,11 +4,13 @@
 #include <stddef.h>
 
 bool PodeMoverPara(Level *level, float px, float py, float raio, int tw, int th) {
+    /*A linhas abaixo pegam as coordenadas dos tiles que o player ocupa*/
     int esq   = (int)((px - raio) / tw);
     int dir   = (int)((px + raio) / tw);
     int cima  = (int)((py - raio) / th);
     int baixo = (int)((py + raio) / th);
 
+    //A função level_pode_mover é chamada para cada um dos 4 tiles que o player ocupa, para verificar se ele pode se mover para essa posição. Se algum dos tiles for bloqueado, a função retorna false, indicando que o player não pode se mover para essa posição.
     return level_pode_mover(level, esq, cima) &&
            level_pode_mover(level, dir, cima) &&
            level_pode_mover(level, esq, baixo) &&
@@ -28,6 +30,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTe
     player->cooldownTimeCounter = 0.0f;
     player->dashDirection = (Vector2){ 0, 0 };
     player->lastMovingDir = (Vector2){ 0.0f, 1.0f }; //Começa olhando para o SUL.
+    player->attackDirection = player->lastMovingDir;
     player->lastHorizontalInput = 1;
     player->lastVerticalInput = 0;
     player->comboStep = 0;
@@ -75,6 +78,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTe
     player->frameRec = (Rectangle){0, 0, 0, 0}; //Inicializa o retângulo de corte da textura. O UpdatePlayer vai atualizar isso de acordo com o frame atual e a direção.
 }
 
+//SetupAnimationSprite é a função responsável por configurar a textura de animação do player, definindo o frame atual, o retângulo de corte e a velocidade de animação. Ela é chamada dentro do UpdatePlayer para atualizar a animação de acordo com o estado do player.
 static void SetupAnimationSprite(Player *player, Texture2D *texture, int frameCols, int frameRows, int totalFrames, float deltaTime, float animSpeed) {
     if (frameCols < 1) frameCols = 1;
     if (frameRows < 1) frameRows = 1;
@@ -116,6 +120,7 @@ static void SetupAnimationSprite(Player *player, Texture2D *texture, int frameCo
     player->frameRec.y = frameRow * frameH;
 }
 
+//GetPlayerSpriteAnchors é uma função auxiliar que calcula as posições dos pontos de ancoragem do sprite do player, como o topo esquerdo e o centro, com base no retângulo de corte atual da textura e no raio do player. Esses pontos de ancoragem são usados para posicionar corretamente o sprite em relação à posição física do player no mundo do jogo.
 static void GetPlayerSpriteAnchors(const Player *player, Vector2 *topLeft, Vector2 *core) {
     float frameW = player->frameRec.width;
     float frameH = player->frameRec.height;
@@ -145,12 +150,41 @@ static void GetPlayerSpriteAnchors(const Player *player, Vector2 *topLeft, Vecto
     if (core != NULL) *core = spriteCore;
 }
 
+//UpdateAttackHitboxFromSprite é a função responsável por atualizar a posição da hitbox de ataque do player com base na posição do sprite e na direção do ataque. Ela é chamada dentro do UpdatePlayer para garantir que a hitbox esteja sempre alinhada com o sprite durante as animações de ataque.
 static void UpdateAttackHitboxFromSprite(Player *player) {
+    //O IF aqui verifica se a hitbox de ataque está ativa. Se não estiver ativa, não faz sentido atualizar a posição da hitbox, então a função retorna imediatamente.
     if (!player->isHitboxActive) {
         return;
     }
-    // Restaurado: hitbox centrada na posição física do jogador (comportamento padrão)
-    player->hitboxCenter = player->pos;
+
+    // A hitbox usa a direção travada no início do ataque, para não depender do input atual.
+    Vector2 aimDir = player->attackDirection;
+    if (aimDir.x == 0.0f && aimDir.y == 0.0f) {
+        aimDir = player->lastMovingDir;
+    }
+
+    aimDir = Vector2Normalize(aimDir);
+
+    Vector2 spriteTopLeft;
+    Vector2 spriteCore;
+    GetPlayerSpriteAnchors(player, &spriteTopLeft, &spriteCore);
+
+    float frameW = player->frameRec.width;
+    float frameH = player->frameRec.height;
+    float maxReach = (frameW > frameH ? frameW : frameH) * 0.25f;
+    if (player->comboStep == 3) maxReach *= 1.20f;
+    else if (player->comboStep == 4) maxReach *= 1.35f;
+
+    float useReach = maxReach * 0.9f;
+    if (useReach < 1.0f) useReach = 0.0f;
+
+    float forwardOffset = (frameW > frameH ? frameW : frameH) * 0.18f;
+    if (player->comboStep == 3) forwardOffset *= 1.10f;
+    else if (player->comboStep == 4) forwardOffset *= 1.20f;
+
+    float attackOffset = useReach + forwardOffset;
+
+    player->hitboxCenter = Vector2Add(spriteCore, Vector2Scale(aimDir, attackOffset));
 }
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
@@ -273,6 +307,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1;
                 player->attackStateTimer = 0.0f;
                 player->comboStep = 4;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 player->isHitboxActive = false;
                 player->hasHitEnemy = false;
             }
@@ -306,6 +341,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
             player->attackState = 1;
             player->attackStateTimer = 0.0f;
             player->comboStep = 4;
+            player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
             player->isHitboxActive = false;
             player->hasHitEnemy = false;
         }
@@ -358,6 +394,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 if (!staminaInfinite) {
                     PlayerUseStamina(player, ATTACK_COST);
                 }
@@ -369,6 +406,7 @@ void UpdatePlayer(Player *player, float deltaTime, Level *level) {
                 player->attackState = 1; 
                 player->attackStateTimer = 0.0f;
                 player->hasHitEnemy = false;
+                player->attackDirection = (inputDir.x == 0.0f && inputDir.y == 0.0f) ? player->lastMovingDir : inputDir;
                 if (!staminaInfinite) {
                     PlayerUseStamina(player, ATTACK_COST);
                 }
