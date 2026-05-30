@@ -4,6 +4,58 @@
 #include "raylib.h"
 #include "level.h"
 
+//Vamos criar uma estrutura para armazernar as texturas das direções de cada estado.
+//No caso, aqui, estaremos pegando o índice que corresponde a um arquivo png.
+typedef struct{
+    Texture2D idle[8];
+    Texture2D walk[8];
+    Texture2D attack[8];
+    Texture2D comboAttack[8];
+    Texture2D heavyAttack[8];
+    Texture2D die[8];
+    Texture2D dash[8];
+    Texture2D parry[8];
+    Texture2D heal[8];
+
+    int idleFrameCols;
+    int idleFrameRows;
+    int idleTotalFrames;
+    int walkFrameCols;
+    int walkFrameRows;
+    int walkTotalFrames;
+    int attackFrameCols;
+    int attackFrameRows;
+    int attackTotalFrames;
+    int comboAttackFrameCols;
+    int comboAttackFrameRows;
+    int comboAttackTotalFrames;
+    int heavyAttackFrameCols;
+    int heavyAttackFrameRows;
+    int heavyAttackTotalFrames;
+    int dieFrameCols;
+    int dieFrameRows;
+    int dieTotalFrames;
+    int dashFrameCols;
+    int dashFrameRows;
+    int dashTotalFrames;
+    int parryFrameCols;
+    int parryFrameRows;
+    int parryTotalFrames;
+    int healFrameCols;
+    int healFrameRows;
+    int healTotalFrames;
+
+    float idleAnimSpeed;
+    float walkAnimSpeed;
+    float attackAnimSpeed;
+    float comboAttackAnimSpeed;
+    float heavyAttackAnimSpeed;
+    float dieAnimSpeed;
+    float dashAnimSpeed;
+    float parryAnimSpeed;
+    float healAnimSpeed;
+} PlayerTextures;
+
 typedef enum {
     PLAYER_STATE_IDLE,
     PLAYER_STATE_HEAVY_ATTACK
@@ -58,9 +110,19 @@ typedef struct {
     float baseStaminaRecoveryRate;
     bool isExhausted;
     bool alive;
+
+    PlayerTextures *textures;
+    Texture2D *activeTexture; //Ponteiro para a textura rodando agora.
+    Rectangle frameRec; //Retângulo de corte do frame atual.
+    int currentFrame; //Frame atual da imagem.
+    int activeMaxFrames; //Quantos frames tem a imagem atual.
+    float frameTimer; //Cronômetro para trocar frame.
+    int currentDirIndex; //Direção atual(0 a 7).
+    Vector2 spriteAnchorOffset; //Offset visual do sprite relativo ao ponto físico do player.
 } Player;
 
-void InitPlayer(Player *player, float tileX, float tileY, Level *level);
+//Adicionando ponteiro para PlayerTextures na inicialização.
+void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTextures *textures);
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level);
 
