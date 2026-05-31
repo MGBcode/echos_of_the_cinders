@@ -1,321 +1,74 @@
-CONSTRUÇÃO DA TELA:
-    screenWidth = largura da janela em pixels
-    screenHeight = altura da janela em pixels
+INSTRUÇÕES DE COMPILAÇÃO E USO
 
-VARIÁVEIS DE TEMPO E CONTROLE GERAL:
-    deltaTime = tempo real entre o frame anterior e o atual, em frações de segundo. É usado para
-                padronizar velocidades, animações e cronômetros independentemente do FPS.
-    inputDir = vetor temporário (X, Y) que guarda a direção atual do movimento do jogador.
+- Linux:
+    Instale Raylib e dependências do sistema.
+    Exemplo Debian/Ubuntu:
+        sudo apt update
+        sudo apt install libraylib-dev libgl1-mesa-dev libx11-dev libpthread-stubs0-dev
 
-VARIÁVEIS BASE DO JOGADOR (STRUCT Player):
-    pos = posição atual do jogador na tela
-    raio = raio usado para desenho e colisão
-    normalSpeed = velocidade base do jogador, em pixels por segundo
+- Windows:
+    Use MSYS2/Mingw ou binários Raylib compatíveis com gcc/MinGW.
+    Exemplo MSYS2:
+        pacman -S mingw-w64-x86_64-raylib mingw-w64-x86_64-gcc
 
-VARIÁVEIS DO DASH:
-    isDashing = indica se o player está executando dash
-    dashSpeedMultiplier = multiplicador aplicado sobre a velocidade base durante o dash
-    dashDuration = duração máxima do dash
-    dashCooldown = tempo de recarga entre dashes
-    dashTimeCounter = contador que mede quanto tempo o dash atual já durou
-    cooldownTimeCounter = contador de recarga após o fim do dash
-    dashDirection = direção congelada no momento da ativação do dash
-    lastMovingDir = última direção válida de movimento do jogador
-    diagonalBufferTimer = pequeno timer usado para estabilizar mudanças de direção
+- Compilar e executar:
+    make run
 
-VARIÁVEIS DOS ATAQUES LEVES:
-    comboStep = etapa atual do combo de ataques leves
-    attackState = estado atual da sequência de ataque
-    attackStateTimer = timer do estado atual do ataque
-    comboWindowTimer = janela de tempo que permite continuar o combo
-    attackWindup[] = tempo de preparação de cada golpe
-    attackActive[] = tempo em que a hitbox fica ativa
-    attackRecovery[] = tempo de recuperação após o golpe
-    hitboxCenter = ponto central da hitbox do golpe naquele frame
-    hitboxRadius = alcance da hitbox do golpe
-    isHitboxActive = indica se a hitbox do ataque deve ser desenhada e processada
-    hasHitEnemy = evita múltiplos acertos no mesmo ataque
+    O alvo `run` compila automaticamente se houver mudanças e executa o binário gerado.
 
-ESTRUTURAS E TIPOS:
-    Player = struct que agrupa os dados do jogador, como posição, HP, estamina, estados de dash,
-             parry, cura e combo.
+- Controles do jogo:
+    - Movimento em 8 direções: W A S D
+    - Ataque leve com combos: clique esquerdo
+    - Ataque pesado carregável: tecla E
+    - Parry: clique direito
+    - Cura: tecla Q
 
-FUNÇÕES DO JOGADOR (player.c):
-    InitPlayer = preenche a struct Player com os valores iniciais da partida
-    UpdatePlayer = processa movimento, leitura do teclado, dash, cura, parry, ataques e estamina
-    DrawPlayer = desenha o jogador de acordo com o estado atual (normal, dash, recarga, parry)
+DETALHES DE IMPLEMENTAÇÃO
 
-FUNÇÕES DA RAYLIB / RAYMATH:
-    InitWindow = cria a janela do jogo e define título e dimensões
-    SetTargetFPS = limita a taxa de atualização do jogo
-    WindowShouldClose = retorna verdadeiro quando o usuário fecha a janela ou aciona a tecla de saída
-    GetFrameTime = retorna o tempo do frame atual
-    IsKeyDown = verifica se uma tecla está sendo segurada
-    IsKeyPressed = verifica se uma tecla foi pressionada neste frame
-    Vector2Normalize = normaliza vetores, evitando movimento diagonal mais rápido que o reto
-    BeginDrawing = inicia a renderização do frame
-    ClearBackground = limpa a tela com uma cor sólida
-    DrawCircleV = desenha um círculo usando um Vector2 como centro
-    DrawCircleGradient = desenha um círculo com gradiente radial
-    DrawText = desenha texto na tela
-    TextFormat = monta texto formatado com variáveis
-    EndDrawing = encerra a renderização do frame
-    CloseWindow = fecha a janela e libera recursos da biblioteca
+player.c
+    - InitPlayer(): inicializa posição, HP, estamina, offsets de hitbox e estados de ataque.
+    - UpdatePlayer(): atualiza movimento 8D, dash, controle de parry, lógica de cura e combo de ataques.
+    - DrawPlayer(): desenha sprite do jogador, animações e efeitos de hitbox/parry.
 
-MÓDULO DE MAPA (level.h e level.c):
-    LARGURA_MAPA e ALTURA_MAPA = definem quantas colunas e linhas o mapa possui
-    enum TipeTile = lista dos tipos de tiles usados pelo mapa (TILE_VAZIO, TILE_PAREDE, TILE_PORTA etc.)
-    struct Level = guarda a grade do mapa e os tamanhos matemáticos dos tiles em pixels
-    level_iniciar() = cria a primeira sala e preenche bordas com parede e interior com vazio
-    level_atualizar_tile() = recalcula o tamanho dos tiles de acordo com a resolução atual da tela
-    level_desenhar() = percorre a grade e desenha cada tile com uma cor diferente
-    level_pode_mover() = verifica se um movimento circular pode ocupar um tile sem colisão
-    level_carregar_sala() = troca a sala atual entre treino e boss
-    level_abrir_saida_boss() = libera a porta da sala do boss quando ele é derrotado
+enemy.c
+    - Boss_Init(): configura HP, fase, timers, AI state machine e parâmetros de ataque do boss.
+    - Boss_Update(): processa movimentação do boss, seleção de ataque, colisões e transições de estado.
+    - Boss_Draw(): renderiza o boss e seus efeitos visuais.
 
-DUMMY DE TREINAMENTO:
-    - Fica fixo no centro da sala de treino
-    - Possui HP praticamente infinito para teste de combos
-    - Não se move nem reage
-    - Serve para testar timing, alcance e dano dos ataques do jogador
+main.c
+    - main(): cria janela Raylib, inicializa subsistemas, executa loop de jogo e finaliza recursos.
+    - ciclo principal: leitura de input, UpdatePlayer(), Boss_Update(), detecção de colisões e renderização.
 
-============================================================
-MÓDULO DE MENU (menu.h e menu.c)
-============================================================
-OBJETIVO: gerenciar telas, navegação e ranking.
+Highlights do Código
 
-TELA PRINCIPAL (Menu_DrawPrincipal):
-    - Mostra o título do jogo
-    - Botão JOGAR para iniciar a sala de treino
-    - Botão MELHORES TEMPOS para abrir o ranking
-    - Feedback visual ao passar o mouse nos botões
+Máquina de estados do combo de ataque leve:
 
-TELA DE RANKING (Menu_DrawRecordes):
-    - Mostra os 10 melhores tempos salvos em scores.txt
-    - Exibe posição, iniciais do jogador e tempo
-    - Ordena do menor tempo para o maior
-    - Permite voltar para o menu principal
+    if (attackPressed) {
+        if (comboStep == 0) {
+            comboStep = 1;
+            attackStateTimer = attackWindup[0];
+        } else if (comboStep == 1 && comboWindowTimer > 0) {
+            comboStep = 2;
+            attackStateTimer = attackWindup[1];
+        } else if (comboStep == 2 && comboWindowTimer > 0) {
+            comboStep = 3;
+            attackStateTimer = attackWindup[2];
+        }
+    }
 
-TELA DE DERROTA (Menu_DrawDerrota):
-    - Exibe tela de derrota
-    - Permite tentar novamente ou retornar ao menu
+Fórmula de interpolação do dano pesado:
 
-TELA DE AGRADECIMENTO (Menu_DrawAgradecimento):
-    - Exibe tela de vitória
-    - Solicita 3 iniciais do jogador
-    - Salva o tempo final no ranking
+    float chargeRatio = Clamp(chargeTime / maxChargeTime, 0.0f, 1.0f);
+    float damageHeavy = baseHeavy + (maxHeavy - baseHeavy) * chargeRatio;
 
-VARIÁVEIS PRINCIPAIS:
-    isHovering = indica se o mouse está sobre um botão
-    selectedInitial = índice da inicial sendo editada
-    playerInitials[3] = armazena as 3 iniciais do jogador
+Dificuldades Encontradas
 
-============================================================
-MÓDULO DE TIMER (timer.h e timer.c)
-============================================================
-OBJETIVO: controlar o cronômetro da partida e o ranking de tempos.
+- Vazamento de estados de dano entre ataques leves/pesados:
+    ajustes finos na transição de `attackState` e `comboStep` foram necessários para impedir que um ataque pesado alterasse o fluxo do combo leve.
 
-COMPONENTES PRINCIPAIS:
-    cronômetro in-game = inicia ao entrar na sala de treino e para ao vencer o boss
-    MIN_VALID_TIME = tempo mínimo aceito para salvar score
-    MAX_SCORES = limite máximo de posições no ranking
+- Desalinhamento visual do sprite 2.5D top-down em relação à hitbox física e à mira do Boss:
+    padronização de offsets de desenho e recalibração da hitbox em `player.pos` resolveram discrepâncias entre o sprite e a lógica de colisão.
 
-Score (struct):
-    - initialName[3] = iniciais do jogador
-    - time = tempo final em segundos
-
-ARQUIVO scores.txt:
-    - Fica na raiz do projeto
-    - Cada linha segue o formato "XXX Y.YY"
-    - Armazena os melhores tempos em ordem crescente
-
-FUNÇÕES PRINCIPAIS:
-    SaveScore() = salva um novo tempo se ele for válido e entrar no top 10
-    LoadScores() = carrega os tempos salvos do arquivo
-    ResetTimer() = zera o cronômetro
-    UpdateTimer(float deltaTime) = incrementa o tempo da partida
-    GetElapsedTime() = retorna o tempo decorrido atual
-
-FLUXO DE JOGO:
-    1. O jogador entra na sala de treino
-    2. O cronômetro é reiniciado
-    3. O tempo é atualizado a cada frame
-    4. O boss é derrotado
-    5. A tela de agradecimento solicita as iniciais
-    6. O score é salvo e o ranking é atualizado
-
-============================================================
-MÓDULO DE IA E COMBATE DO BOSS (enemy.h e enemy.c)
-============================================================
-OBJETIVO: controlar estados, movimentação, ataques e colisões do chefe.
-
-ESTRUTURAS PRINCIPAIS:
-    BossState = máquina de estados do boss
-        - BOSS_OBSERVE: aproxima e avalia distância
-        - BOSS_HUNT: perseguição ativa
-        - BOSS_ATTACK: execução do ataque selecionado
-        - BOSS_COOLDOWN: pausa após o ataque
-
-    BossAttackType = tipos de ataque do boss
-        - BOSS_ATTACK_TYPE_LIGHT
-        - BOSS_ATTACK_TYPE_HEAVY
-        - BOSS_ATTACK_TYPE_BRUTAL
-        - BOSS_ATTACK_TYPE_PROJECTILE
-        - BOSS_ATTACK_TYPE_AOE_BURST
-
-    AttackCircle = hitbox circular usada pelos ataques do boss
-        - center = centro do ataque
-        - radius = alcance
-        - damage = dano aplicado
-        - active = indica se o ataque deve ser processado
-
-    ProjectileNode = lista encadeada de projéteis usados pelo boss
-
-    Boss = struct principal do inimigo, com HP, posição, velocidades, timers, fases e dados de ataque
-
-FUNÇÕES DE LÓGICA:
-    Boss_Init() = inicializa HP, fase, velocidades, timers e parâmetros de ataque
-    Boss_Update() = executa a IA a cada frame, decide ataques, move o boss e processa dano
-    Boss_Draw() = desenha o boss e seus efeitos visuais
-    Boss_GetAttackCircle() = expõe a hitbox do ataque atual quando ela estiver ativa
-    MoveWithCollision() = desloca o boss com colisão, tratando X e Y separadamente
-
-SISTEMA DE COMBATE:
-    - Ataque Leve: sequência rápida de golpes curtos
-    - Ataque Pesado: combo com golpe 1, dash e golpe 2
-    - Ataque Brutal: investida forte em linha reta
-    - Projéteis: usados apenas em longa distância e na fase 2, nunca como primeiro ataque
-    - AoE Burst: disparo em área que ocorre ao atingir 50% de HP e novamente ao atingir 15% de HP
-
-REGRAS ATUAIS DA IA:
-    - Distância curta: Light e Heavy
-    - Distância média: Brutal e Heavy
-    - Distância longa: Projéteis com prioridade alta na fase 2
-    - O boss evita repetir o mesmo ataque duas vezes seguidas quando há alternativa válida
-    - Após projéteis, o boss retorna para BOSS_HUNT para continuar a perseguição
-
-VARIÁVEIS LÓGICAS IMPORTANTES:
-    deltaTime = mantém o comportamento independente do FPS
-    aggroRadius = raio de detecção do jogador
-    observeSpeed e huntSpeed = velocidades de movimentação do boss
-    brutalLungeSpeed = velocidade da investida do Brutal
-    aoe50Triggered e aoe15Triggered = controlam os disparos únicos do AoE em vida crítica
-
-FUNÇÕES PRINCIPAIS:
-
-    Menu_DrawPrincipal() = Renderiza a tela inicial com titulo, botões JOGAR e MELHORES TEMPOS.
-                           Detecta cliques e retorna transição de estado para TREINO ou RECORDES.
-
-    Menu_DrawRecordes() = Exibe os 10 melhores tempos do ranking.
-                          Carrega dados de scores.txt usando LoadScores().
-                          Permite retornar à tela principal.
-
-    Menu_DrawDerrota() = Exibe tela de morte com fundo vermelho.
-                         Oferece reiniciar ou voltar ao menu.
-
-    Menu_DrawAgradecimento() = Exibe tela de vitória com fundo dourado.
-                               Interface para digitar 3 iniciais do nome.
-                               Valida input e prepara para salvar tempo.
-
-INTERAÇÕES DO USUÁRIO:
-
-    Botões: Clique do mouse para ativar ações (JOGAR, RECORDES, VOLTAR, REINICIAR)
-    Input de Nome: Teclado para digitar até 3 caracteres alfanuméricos
-    Navegação: Transições entre telas baseadas em estados de jogo
-
-============================================================
-MÓDULO DE TIMER (timer.h e timer.c)
-============================================================
-OBJETIVO: Gerenciar cronômetro in-game, persistência de scores e ranking de leaderboard.
-
-COMPONENTES PRINCIPAIS:
-
-CRONÔMETRO IN-GAME (timer.c):
-    - Inicia quando o jogador entra na SALA_TREINO
-    - Para quando o Boss é derrotado (vitória)
-    - Exibido em HUD no canto superior direito durante gameplay
-    - Formato: "Tempo: X.XXs" (segundos com 2 casas decimais)
-
-SISTEMA DE PONTUAÇÃO:
-
-    MIN_VALID_TIME = 1.0f
-        Constante que rejeita tempos muito curtos (< 1 segundo).
-        Previne exploits onde jogador derrotasse o Boss instantaneamente.
-
-    MAX_SCORES = 10
-        Número máximo de posições no ranking. Apenas os top 10 tempos são salvos.
-
-    Score (Struct):
-        - initialName[3] = Iniciais do nome do jogador
-        - time = Tempo em segundos (float) com precisão de centésimos
-
-ARQUIVO DE PERSISTÊNCIA (scores.txt):
-    - Localização: raiz do projeto
-    - Formato de linha: "XXX Y.YY\n"
-        * XXX = 3 caracteres de iniciais (ex: "ABC")
-        * Y.YY = Número float com até 2 casas decimais (ex: "123.45")
-        * \n = Quebra de linha após cada entrada
-
-    - Exemplo conteúdo:
-        ABC 45.32
-        XYZ 67.89
-        DEF 50.12
-
-FUNÇÕES DE GERENCIAMENTO:
-
-    SaveScore(const char initialName[3], float time)
-        = Salva um novo score se:
-          1. O tempo é válido (>= MIN_VALID_TIME)
-          2. Carrega scores existentes de scores.txt
-          3. Insere o novo score na posição correta (ordenação ascendente)
-          4. Mantém apenas os top 10 (remove posição 11 se houver)
-          5. Reescreve o arquivo scores.txt com array atualizado
-        
-        Parâmetros:
-            - initialName: Ponteiro para array de 3 caracteres com iniciais
-            - time: Tempo em segundos (float)
-
-    LoadScores(Score scores[], int *count)
-        = Carrega scores existentes de scores.txt:
-          1. Abre arquivo em modo leitura
-          2. Percorre linhas e extrai iniciais + tempo
-          3. Preenche array 'scores' com dados ordenados
-          4. Armazena quantidade de scores lidos em 'count'
-          5. Fecha arquivo
-        
-        Parâmetros:
-            - scores: Array de Score para armazenar dados lidos
-            - count: Ponteiro para inteiro que receberá quantidade de scores
-
-    ResetTimer()
-        = Reinicia o cronômetro para zero. Chamado ao entrar em SALA_TREINO.
-
-    UpdateTimer(float deltaTime)
-        = Incrementa o cronômetro baseado em deltaTime.
-          Chamado a cada frame dentro de UPDATE_TREINO.
-
-    GetElapsedTime()
-        = Retorna o tempo decorrido em segundos.
-          Usado em HUD e ao derrotar o Boss.
-
-FLUXO DE JOGO:
-
-    1. Jogador clica JOGAR na tela principal
-    2. Estado muda para STATE_TREINO
-    3. ResetTimer() é chamado
-    4. Cronômetro incrementa a cada frame
-    5. Jogador treina e derrota o Boss
-    6. Estado muda para STATE_AGRADECIMENTO
-    7. GetElapsedTime() fornece o tempo final
-    8. Jogador digita 3 iniciais
-    9. SaveScore() registra o novo tempo no ranking
-    10. Tela de RECORDES mostra posição (ou não, se fora do top 10)
-
-VALIDAÇÃO E SEGURANÇA:
-
-    - Tempos < 1.0s são rejeitados automaticamente
-    - Array de scores mantém apenas top 10
-    - Arquivo scores.txt é lido/escrito apenas quando necessário
-    - Proteção contra corrupção de dados (formato fixo XXX Y.YY)
-
-============================================================
+- Portabilidade do Makefile para Windows/Linux:
+    o Makefile agora usa `ifeq ($(OS),Windows_NT)` para escolher `-lopengl32 -lgdi32 -lwinmm` no Windows e `-lraylib -lGL -lm -lpthread -ldl -lrt -lX11` no Linux.
+    comandos de limpeza usam `del /Q` no Windows e `rm -f` no Linux.
