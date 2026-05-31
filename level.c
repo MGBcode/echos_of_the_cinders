@@ -1,6 +1,8 @@
 #include "level.h"
 #include <raylib.h>
 
+#include <stdio.h>
+
 void level_atualizar_tile(Level *level) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -68,16 +70,35 @@ void level_desenhar(Level *level) {
 
     for (int y = 0; y < ALTURA_MAPA; y++) {
         for (int x = 0; x < LARGURA_MAPA; x++) {
-            Color cor;
-            switch (level->grade[y][x]) {
-                case TILE_VAZIO:  cor = (Color){ 30,  30,  30,  255 }; break;
-                case TILE_PAREDE: cor = (Color){ 80,  80,  80,  255 }; break;
-                case TILE_BLOCO:  cor = (Color){ 160, 110, 40,  255 }; break;
-                case TILE_PORTA:  cor = (Color){ 160, 110, 40,  255 }; break;
-                default:          cor = BLACK;                          break;
+            // Desenhar usando texturas quando disponíveis, caso contrário fallback em retângulos coloridos
+            Rectangle dest = { x * tw, y * th, tw, th };
+
+            if (level->grade[y][x] == TILE_VAZIO) {
+                if (level->chao_tex.id != 0)
+                {
+                    Rectangle src = { 0, 0, (float)level->chao_tex.width, (float)level->chao_tex.height };
+                    DrawTexturePro(level->chao_tex, src, dest, (Vector2){0,0}, 0.0f, WHITE);
+                }
+                else DrawRectangle(x * tw, y * th, tw, th, (Color){30,30,30,255});
+            } else if (level->grade[y][x] == TILE_PAREDE) {
+                if (level->parede_tex.id != 0)
+                {
+                    Rectangle src = { 0, 0, (float)level->parede_tex.width, (float)level->parede_tex.height };
+                    DrawTexturePro(level->parede_tex, src, dest, (Vector2){0,0}, 0.0f, WHITE);
+                }
+                else DrawRectangle(x * tw, y * th, tw, th, (Color){80,80,80,255});
+            } else {
+                // Para blocos/portas, desenha chão e um overlay de cor
+                if (level->chao_tex.id != 0)
+                {
+                    Rectangle src = { 0, 0, (float)level->chao_tex.width, (float)level->chao_tex.height };
+                    DrawTexturePro(level->chao_tex, src, dest, (Vector2){0,0}, 0.0f, WHITE);
+                } else DrawRectangle(x * tw, y * th, tw, th, (Color){30,30,30,255});
+
+                Color overlay = (level->grade[y][x] == TILE_BLOCO) ? (Color){160,110,40,200} : (Color){160,110,40,200};
+                DrawRectangle(x * tw, y * th, tw, th, overlay);
+                DrawRectangleLines(x * tw, y * th, tw, th, BLACK);
             }
-            DrawRectangle(x * tw, y * th, tw, th, cor);
-            DrawRectangleLines(x * tw, y * th, tw, th, BLACK);
         }
     }
 
@@ -96,4 +117,25 @@ void level_desenhar(Level *level) {
             DrawText("BLOQUEADA", portaPixelX - 90, portaPixelY, 14, RED);
         }
     }
+}
+
+void level_load_textures(Level *level) {
+    // Inicializar com 0 para evitar dados inválidos
+    level->chao_tex = (Texture2D){0};
+    level->parede_tex = (Texture2D){0};
+
+    // Tentar carregar as texturas do diretório de assets
+    level->chao_tex = LoadTexture("assets/mapa/chao.png");
+    level->parede_tex = LoadTexture("assets/mapa/parede.png");
+
+    // Log simples caso falhe
+    if (level->chao_tex.id == 0) TraceLog(LOG_WARNING, "Falha ao carregar assets/mapa/chao.png");
+    if (level->parede_tex.id == 0) TraceLog(LOG_WARNING, "Falha ao carregar assets/mapa/parede.png");
+}
+
+void level_unload_textures(Level *level) {
+    if (level->chao_tex.id != 0) UnloadTexture(level->chao_tex);
+    if (level->parede_tex.id != 0) UnloadTexture(level->parede_tex);
+    level->chao_tex = (Texture2D){0};
+    level->parede_tex = (Texture2D){0};
 }

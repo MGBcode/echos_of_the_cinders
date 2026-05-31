@@ -158,6 +158,7 @@ int main(void) {
     TrainingDummy dummy;
 
     level_iniciar(&level);
+    level_load_textures(&level);
 
     ResetJogo(&cavaleiro, &boss, &dummy, &level, &playerVisuals);
     TimerData timer;
@@ -820,6 +821,7 @@ int main(void) {
 
     //Liberação de memória de Texturas do Player.
     UnloadPlayerTextures(&playerVisuals);
+    level_unload_textures(&level);
     ShowCursor();
     CloseWindow();
 
