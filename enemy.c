@@ -270,8 +270,12 @@ static void StartAttack(Boss *b, BossAttackType attackType, Vector2 playerPos) {
 void Boss_Update(Boss *b, float dt, Player *player, Level *level) {
     if (b->hp <= 0) return;
 
-    Vector2 playerPos = player->pos;
-    float playerRadius = player->raio;
+    Rectangle playerHitbox = GetPlayerHitbox(player);
+    Vector2 playerPos = {
+        playerHitbox.x + playerHitbox.width * 0.5f,
+        playerHitbox.y + playerHitbox.height * 0.5f
+    };
+    float playerRadius = (playerHitbox.width > playerHitbox.height ? playerHitbox.width : playerHitbox.height) * 0.5f;
 
     int tw = level->tamanho_tile;
     int th = level->tamanho_tile_h;

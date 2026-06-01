@@ -78,6 +78,13 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTe
     player->frameRec = (Rectangle){0, 0, 0, 0}; //Inicializa o retângulo de corte da textura. O UpdatePlayer vai atualizar isso de acordo com o frame atual e a direção.
 }
 
+Rectangle GetPlayerHitbox(Player *player) {
+    float width = 30.0f;  // Ajuste para a largura do corpo do cavaleiro
+    float height = 40.0f; // Ajuste para a altura do tronco
+    float offsetY = 30.0f; // Valor que empurra a hitbox para cima
+    return (Rectangle){ player->pos.x - (width / 2.0f), player->pos.y - offsetY, width, height };
+}
+
 //SetupAnimationSprite é a função responsável por configurar a textura de animação do player, definindo o frame atual, o retângulo de corte e a velocidade de animação. Ela é chamada dentro do UpdatePlayer para atualizar a animação de acordo com o estado do player.
 static void SetupAnimationSprite(Player *player, Texture2D *texture, int frameCols, int frameRows, int totalFrames, float deltaTime, float animSpeed) {
     if (frameCols < 1) frameCols = 1;
@@ -120,36 +127,6 @@ static void SetupAnimationSprite(Player *player, Texture2D *texture, int frameCo
     player->frameRec.y = frameRow * frameH;
 }
 
-//GetPlayerSpriteAnchors é uma função auxiliar que calcula as posições dos pontos de ancoragem do sprite do player, como o topo esquerdo e o centro, com base no retângulo de corte atual da textura e no raio do player. Esses pontos de ancoragem são usados para posicionar corretamente o sprite em relação à posição física do player no mundo do jogo.
-static void GetPlayerSpriteAnchors(const Player *player, Vector2 *topLeft, Vector2 *core) {
-    float frameW = player->frameRec.width;
-    float frameH = player->frameRec.height;
-
-    if (frameW <= 0.0f || frameH <= 0.0f) {
-        frameW = player->raio * 2.0f;
-        frameH = player->raio * 2.0f;
-    }
-
-    Vector2 spriteTopLeft = {
-        player->pos.x - (frameW / 2.0f),
-        player->pos.y - (frameH * 0.85f)
-    };
-
-    Vector2 spriteCore = {
-        spriteTopLeft.x + (frameW * 0.50f),
-        spriteTopLeft.y + (frameH * 0.50f)
-    };
-
-    spriteTopLeft.x += player->spriteAnchorOffset.x;
-    spriteTopLeft.y += player->spriteAnchorOffset.y;
-
-    spriteCore.x += player->spriteAnchorOffset.x;
-    spriteCore.y += player->spriteAnchorOffset.y;
-
-    if (topLeft != NULL) *topLeft = spriteTopLeft;
-    if (core != NULL) *core = spriteCore;
-}
-
 //UpdateAttackHitboxFromSprite é a função responsável por atualizar a posição da hitbox de ataque do player com base na posição do sprite e na direção do ataque. Ela é chamada dentro do UpdatePlayer para garantir que a hitbox esteja sempre alinhada com o sprite durante as animações de ataque.
 static void UpdateAttackHitboxFromSprite(Player *player) {
     //O IF aqui verifica se a hitbox de ataque está ativa. Se não estiver ativa, não faz sentido atualizar a posição da hitbox, então a função retorna imediatamente.
@@ -165,9 +142,11 @@ static void UpdateAttackHitboxFromSprite(Player *player) {
 
     aimDir = Vector2Normalize(aimDir);
 
-    Vector2 spriteTopLeft;
-    Vector2 spriteCore;
-    GetPlayerSpriteAnchors(player, &spriteTopLeft, &spriteCore);
+    Rectangle playerHitbox = GetPlayerHitbox(player);
+    Vector2 hitboxCenter = {
+        playerHitbox.x + (playerHitbox.width * 0.5f),
+        playerHitbox.y + (playerHitbox.height * 0.5f)
+    };
 
     float frameW = player->frameRec.width;
     float frameH = player->frameRec.height;
@@ -184,7 +163,7 @@ static void UpdateAttackHitboxFromSprite(Player *player) {
 
     float attackOffset = useReach + forwardOffset;
 
-    player->hitboxCenter = Vector2Add(spriteCore, Vector2Scale(aimDir, attackOffset));
+    player->hitboxCenter = Vector2Add(hitboxCenter, Vector2Scale(aimDir, attackOffset));
 }
 
 void UpdatePlayer(Player *player, float deltaTime, Level *level) {
@@ -654,20 +633,29 @@ LOGICA_VISUAL:
 }
 
 void DrawPlayer(Player player) {
-    if (player.activeTexture != NULL && player.activeTexture->id != 0) {
-        Vector2 renderPos;
-        Vector2 spriteCore;
-        GetPlayerSpriteAnchors(&player, &renderPos, &spriteCore);
-        
-        // Destacar o jogador ao dar dash/receber dano colorindo o sprite todo
-        Color tint = WHITE;
-        if (player.isDashing) tint = ORANGE; // Feedback visual que está em i-frames
-        else if (player.cooldownTimeCounter > 0.0f) tint = GRAY; // Em cooldown
+    Rectangle playerHitbox = GetPlayerHitbox(&player);
+    float centerX = playerHitbox.x + (playerHitbox.width / 2.0f);
+    float centerY = playerHitbox.y + (playerHitbox.height / 2.0f);
 
-        DrawTextureRec(*player.activeTexture, player.frameRec, renderPos, tint);
-        
+    if (player.activeTexture != NULL && player.activeTexture->id != 0) {
+        Rectangle destRec = {
+            centerX + player.spriteAnchorOffset.x,
+            centerY + player.spriteAnchorOffset.y,
+            player.frameRec.width,
+            player.frameRec.height
+        };
+        Vector2 origin = {
+            player.frameRec.width * 0.5f,
+            player.frameRec.height * 0.5f
+        };
+
+        Color tint = WHITE;
+        if (player.isDashing) tint = ORANGE;
+        else if (player.cooldownTimeCounter > 0.0f) tint = GRAY;
+
+        DrawTexturePro(*player.activeTexture, player.frameRec, destRec, origin, 0.0f, tint);
+        DrawRectangleLinesEx(playerHitbox, 2, GREEN);
     } else {
-        // Fallback: Se as texturas não estiverem carregadas, volta para a bolinha base original
         if (!player.alive) return;
         Color playerOuterColor = MAROON;
         if (player.isDashing) playerOuterColor = WHITE;
@@ -676,12 +664,9 @@ void DrawPlayer(Player player) {
         DrawCircleV(player.pos, player.raio, playerOuterColor);
         DrawCircleGradient(player.pos, player.raio * 0.65f, ORANGE, playerOuterColor);
     }
-    // Opcional: Mantivemos as formas das armas originais sendo desenhadas como visual/debug da hitbox
+
     if (player.isParrying) {
-        Vector2 spriteTopLeft;
-        Vector2 spriteCore;
-        GetPlayerSpriteAnchors(&player, &spriteTopLeft, &spriteCore);
-        DrawCircleLines((int)spriteCore.x, (int)spriteCore.y, player.raio * 1.35f, BLUE);
+        DrawCircleLines((int)centerX, (int)centerY, player.raio * 1.35f, BLUE);
     }
     if (player.isHitboxActive) {
         DrawCircleLines((int)player.hitboxCenter.x, (int)player.hitboxCenter.y, player.hitboxRadius, RED);

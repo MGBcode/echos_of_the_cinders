@@ -144,4 +144,6 @@ void UpdatePlayerStamina(Player *player, float deltaTime);
 //DrawPlayerHUD é a função responsável por desenhar a interface de vida, stamina e frascos do player na tela. Ela recebe o Player por ponteiro, pois precisa acessar suas informações para desenhar o HUD corretamente.
 void DrawPlayerHUD(const Player *player, int x, int y);
 
+Rectangle GetPlayerHitbox(Player *player);
+
 #endif

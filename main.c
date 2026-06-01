@@ -469,8 +469,13 @@ int main(void) {
                             &cavaleiro,
                             &level);
 
-                float dx = cavaleiro.pos.x - boss.pos.x;
-                float dy = cavaleiro.pos.y - boss.pos.y;
+                Rectangle cavaleiroHitbox = GetPlayerHitbox(&cavaleiro);
+                Vector2 cavaleiroCenter = {
+                    cavaleiroHitbox.x + cavaleiroHitbox.width * 0.5f,
+                    cavaleiroHitbox.y + cavaleiroHitbox.height * 0.5f
+                };
+                float dx = cavaleiroCenter.x - boss.pos.x;
+                float dy = cavaleiroCenter.y - boss.pos.y;
                 float dist = sqrtf(dx * dx + dy * dy);
                 float minDist = cavaleiro.raio + boss.raio;
                 if (dist < minDist) {
