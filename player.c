@@ -81,7 +81,7 @@ void InitPlayer(Player *player, float tileX, float tileY, Level *level, PlayerTe
 Rectangle GetPlayerHitbox(Player *player) {
     float width = 30.0f;  // Ajuste para a largura do corpo do cavaleiro
     float height = 40.0f; // Ajuste para a altura do tronco
-    float offsetY = 30.0f; // Valor que empurra a hitbox para cima
+    float offsetY = 0.0f; // Subir mais (ajuste adicional +20px)
     return (Rectangle){ player->pos.x - (width / 2.0f), player->pos.y - offsetY, width, height };
 }
 
@@ -654,7 +654,6 @@ void DrawPlayer(Player player) {
         else if (player.cooldownTimeCounter > 0.0f) tint = GRAY;
 
         DrawTexturePro(*player.activeTexture, player.frameRec, destRec, origin, 0.0f, tint);
-        DrawRectangleLinesEx(playerHitbox, 2, GREEN);
     } else {
         if (!player.alive) return;
         Color playerOuterColor = MAROON;
