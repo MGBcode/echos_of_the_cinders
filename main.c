@@ -127,6 +127,7 @@ static void ResetJogo(Player *cavaleiro,
                       TrainingDummy *dummy,
                       Level *level, PlayerTextures *playerVisuals)
 {
+    (void)boss;
     level_carregar_sala(level, SALA_TREINO);
     level_atualizar_tile(level);
 
@@ -422,12 +423,6 @@ int main(void) {
                      18,
                      DARKGRAY);
 
-            DrawText("C para pausar/resumir",
-                     10,
-                     140,
-                     18,
-                     DARKGRAY);
-
             if (isPaused) {
                 int screenW = GetScreenWidth();
                 int screenH = GetScreenHeight();
@@ -581,8 +576,6 @@ int main(void) {
             DrawPlayerHUD(&cavaleiro,
                           10,
                           10);
-            DrawText("Alt+Enter para Fullscreen", 10, 110, 20, GRAY);
-            DrawText("C para Pausar/Resumir", 10, 140, 20, GRAY);
             DrawBossHUD(&boss);
 
             DrawTimer(&timer);
